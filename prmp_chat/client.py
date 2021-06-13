@@ -162,13 +162,13 @@ class Client(Socket):
             # THREAD(self.start_session)
             ...
             self.LOG('WAITING')
-            # while 1: ...
+            while 1: ...
         
         return response
     
     def logout(self):
         soc_resp = self.send_tag(Tag(action=ACTION.LOGOUT))
-        self.close()
+        self._close()
         return soc_resp
 
     def start_session(self):

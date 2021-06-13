@@ -317,11 +317,12 @@ class Response_Server:
         if id in self.users: del self.users[id]
         if id in self.users_sessions: del self.users_sessions[id]
 
-        if str(session.client) in self.server.connections: del self.server.connections[str(session.client)]
+        self.server.remove(session.client)
+
 
 class Server(Base_All, socket.socket):
     'Server socket for creating server that waits for client connections.'
-    
+
     def __str__(self):
         return f'Server(ip={self.ip or "localhost"}, port={self.port})'
 
@@ -375,11 +376,14 @@ class Server(Base_All, socket.socket):
 
             self.connections[str(client)] = client
             
-            self.response_server.add(client)
-            # THREAD(self.response_server.add, client, address)
+            # self.response_server.add(client)
+            THREAD(self.response_server.add, client)
 
             self.LOG(f'TOTAL OF {self.connected} CLIENTS ARE ONLINE')
 
+    def remove(self, client):
+        if str(client) in self.connections: del self.connections[str(client)]
+        self.LOG(f'TOTAL OF {self.connected} CLIENTS ARE ONLINE')
 
 
 

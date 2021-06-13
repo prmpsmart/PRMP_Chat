@@ -20,7 +20,7 @@ class Server_User(User):
 
 # Server Managers
 
-class Managers:
+class Managers(Base_All):
     OBJS = {}
     OBJ = None
 
@@ -62,6 +62,21 @@ class Channels(Managers):
 MANAGERS = {TYPE.USER: Users, TYPE.GROUP: Groups, TYPE.CHANNEL: Channels}
 
 
+
+class Client_Socket(Sock):
+    def __init__(self, sock_details):
+        Sock.__init__(self, sock_details[0])
+
+        address_port = sock_details[1]
+        self.address = address_port[0]
+        self.port = address_port[1]
+        self.remote = self.socket.getpeername()
+        
+        self.user = None
+    
+    def __str__(self): return f'Client_Socket(address={self.address}, port={self.port})'
+
+    def __eq__(self, other): return str(self) == str(other)
 
 class Session_Parser:
 
@@ -191,11 +206,14 @@ class Session_Parser:
 
 class Session:
 
-    def __init__(self, response_server, client, client_address, user):
+    def __str__(self): return f'Session(client={self.client}, user={self.user})'
+
+    def __init__(self, response_server, client):
         self.client = client
-        self.client_address = client_address
-        self.user = user
+        self.user = client.user
+
         self.user.status = STATUS.ONLINE
+
         self.response_server = response_server
         self.LOG = self.response_server.server.LOG
 
@@ -210,7 +228,7 @@ class Session:
 
             self.LOG(f'Listening to {self.user}')#, end='\r')
 
-            tag = RECV(self.client)
+            tag = self.client.recv_tag()
 
             if tag in SOCKETS:
                 # means that client is offline
@@ -218,7 +236,7 @@ class Session:
                 break
 
             tag = self.parser.parse(tag)
-            soc_resp = SEND(self.client, tag)
+            soc_resp = self.client.send_tag(tag)
             
             if soc_resp in SOCKETS:
                 # means that client is offline
@@ -228,7 +246,9 @@ class Session:
     def stop_session(self):
         self.user.change_status(STATUS.OFFLINE)
 
-        self.LOG(f'{self.client_address} -> {STATUS.OFFLINE} -> {STATUS.LAST_SEEN}={self.user.last_seen}')
+        self.LOG(f'{self.client.address} -> {STATUS.OFFLINE} -> {STATUS.LAST_SEEN}={self.user.last_seen}')
+
+        self.client._close()
 
         self.response_server.remove(self)
 
@@ -238,32 +258,32 @@ class Response_Server:
         self.server = server
         self.LOG = server.LOG
 
-        self.address_client_map = {}
-        self.user_client_map = {}
-        self.address_user_map = {}
+        self.sessions = {}
+        self.users = {}
+        self.users_sessions = {}
 
-    def add(self, client, client_address, from_signup=False):
-        tag = RECV(client)
+    def add(self, client, from_signup=False):
+        tag = client.recv_tag()
         
         if tag in SOCKETS: return
         
         action = ACTION[tag.action]
 
-        LOG = lambda val: self.LOG(f'{client_address} -> ACTION.{action} -> RESPONSE.{val}')
+        LOG = lambda val: self.LOG(f'{client} -> ACTION.{action} -> RESPONSE.{val}')
 
-        if not from_signup: self.LOG(client_address, 'connected!')
+        if not from_signup: self.LOG(client, 'connected!')
 
         if action is ACTION.SIGNUP:
 
             response = Users.create(*tag['id', 'name'], key=tag.key)
             
+            LOG(response)
+            soc_resp = client.send_tag(Tag(response=response))
+            if soc_resp in SOCKETS: return
+            
             if response is RESPONSE.SUCCESSFUL:
                 user = Users.OBJS[tag.id]
-                self.add(client, client_address, from_signup=1)
-
-            LOG(response)
-            soc_resp = SEND(client, Tag(response=response))
-            if soc_resp in SOCKETS: return
+                self.add(client, from_signup=1)
 
         elif action is ACTION.LOGIN:
             response = Users.exists(tag.id)
@@ -271,38 +291,38 @@ class Response_Server:
             if response is RESPONSE.EXIST:
                 user = Users.OBJS[tag.id]
 
-                if user.id in self.user_client_map or user.status is STATUS.ONLINE: response = RESPONSE.SIMULTANEOUS_LOGIN
+                if user.id in self.users or user.status is STATUS.ONLINE: response = RESPONSE.SIMULTANEOUS_LOGIN
 
                 elif user.key == tag.key:
                     response = RESPONSE.SUCCESSFUL
-
-                    self.address_client_map[client_address] = client
-                    self.address_user_map[client_address] = user.id
-                    self.user_client_map[user.id] = client
+                    client.user = user
 
                 else: response = RESPONSE.FALSE_KEY
             
             LOG(response)
-            soc_resp = SEND(client, Tag(response=response))
+            soc_resp = client.send_tag(Tag(response=response))
             if soc_resp in SOCKETS: return soc_resp
 
-            if response is RESPONSE.SUCCESSFUL: Session(self, client, client_address, user)
+            if response is RESPONSE.SUCCESSFUL:
+                session = Session(self, client)
 
-    def remove(self, cl_in):
-        self.address_client_map[cl_in.client_address].close()
+                self.sessions[str(session)] = session
+                self.users[user.id] = user
+                self.users_sessions[user.id] = session
 
-        del self.address_client_map[cl_in.client_address]
-        del self.address_user_map[cl_in.client_address]
-        del self.user_client_map[cl_in.user.id]
+    def remove(self, session):
 
-        client = self.address_client_map[cl_in.client_address]
-        client_address = cl_in.client_address
-        self.server.remove((client, client_address))
+        if str(session) in self.sessions: del self.sessions[str(session)]
+        id = session.user.id
+        if id in self.users: del self.users[id]
+        if id in self.users_sessions: del self.users_sessions[id]
 
-class Server(socket.socket):
+        if str(session.client) in self.server.connections: del self.server.connections[str(session.client)]
+
+class Server(Base_All, socket.socket):
     'Server socket for creating server that waits for client connections.'
     
-    def __str__(self) -> str:
+    def __str__(self):
         return f'Server(ip={self.ip or "localhost"}, port={self.port})'
 
     def __init__(self, ip='', port=7767, reuse_port=True, max_client=3, LOG=print):
@@ -318,8 +338,8 @@ class Server(socket.socket):
         self.port = port
 
         self.LOG = LOG
-        self._online_clients = []
-        self.online_clients = 0
+
+        self.connections = {}
 
         self.max_client = max_client or 10
         self.response_server = Response_Server(self)
@@ -327,36 +347,39 @@ class Server(socket.socket):
         self.bind((self.ip, self.port))
         self.listen(self.max_client)
     
+    @property
+    def sessions(self): return len(self.response_server.sessions)
+
+    @property
+    def connected(self): return len(self.connections)
+    
+    def accept(self): return  Client_Socket(socket.socket.accept(self))
+
     def set_online_clients(self):
-        o_c = []
-        on_cl = self._online_clients.copy()
+        connections = self.connections.copy()
 
-        for online_client in on_cl:
-            response = SEND(online_client[0], Tag(alive=SOCKET.ALIVE))
+        for conn, _conn in connections.items():
+            response = _conn.send(Tag(alive=SOCKET.ALIVE))
 
-            if str(response) == '18': o_c.append(online_client)
-            else: self._online_clients.remove(online_client)
+            if str(response) != '18': del self.connections[conn]
 
-        self._online_clients = o_c
-        self.online_clients = len(o_c)
-
-        time.sleep(.5)
+        time.sleep(1)
         self.set_online_clients()
     
     def start(self):
         self.LOG('Accepting connections !')
-        THREAD(self.set_online_clients)
+        # THREAD(self.set_online_clients)
 
         while True:
-            client, address = self.accept()
-            self._online_clients.append((client, address))
-            
-            THREAD(self.response_server.add, client, address)
+            client = self.accept()
 
-            self.LOG(f'TOTAL OF {self.online_clients+1} CLIENTS ARE ONLINE')
-    
-    def remove(self, client):
-        if client in self._online_clients: self.online_clients.remove(client)
+            self.connections[str(client)] = client
+            
+            self.response_server.add(client)
+            # THREAD(self.response_server.add, client, address)
+
+            self.LOG(f'TOTAL OF {self.connected} CLIENTS ARE ONLINE')
+
 
 
 

@@ -22,7 +22,7 @@ class Client_Channel(Client_Multi_Users): only_admin = True
 
 # User
 
-class Private_Chat:
+class Private_Chat(Base_All):
     def __init__(self, user, recipient):
         self.user = user
         self.recipient = recipient
@@ -37,7 +37,7 @@ class Private_Chat:
     def dispense(self):
         for chat in self.unread_chats: self.add_chat(chat)
 
-class Chats_Manager:
+class Chats_Manager(Base_All):
 
     def __init__(self, user):
         self.user = user
@@ -86,18 +86,19 @@ class Client_User(User):
         User.__init__(self, **kwargs)
         self.chats = Chats_Manager(self)
 
+class Socket(socket.socket, Sock):
+    def __init__(self, *args, **kwargs):
+        socket.socket.__init__(self, *args, **kwargs)
+        Sock.__init__(self)
 
-
-
-
-class Client(socket.socket):
+class Client(Socket):
     'Client socket for connection with the server.'
     
     def __str__(self) -> str:
         return f'Client(ip={self.ip}, port={self.port})'
 
     def __init__(self, ip='localhost', port=7767, user=None, LOG=print):
-        socket.socket.__init__(self, socket.AF_INET, socket.SOCK_STREAM)
+        Socket.__init__(self, socket.AF_INET, socket.SOCK_STREAM)
 
         self.ip = ip
         self.port = port
@@ -113,16 +114,19 @@ class Client(socket.socket):
 
     def signup(self, id, name, key, force=False):
         if not self.connected: self._connect()
+        self.LOG('SIGNING UP')
 
         action = ACTION.SIGNUP
         tag = Tag(id=id, name=name, key=key, action=action)
-        soc_resp = SEND(self, tag)
+        soc_resp = self.send_tag(tag)
         if soc_resp in SOCKETS:
             self.LOG(soc_resp)
             return soc_resp
-        
-        response_tag = RECV(self)
+
+        print('HERE')
+        response_tag = self.recv_tag()
         if response_tag in SOCKETS:
+            print('HERE')
             self.LOG(response_tag)
             return response_tag
 
@@ -141,10 +145,10 @@ class Client(socket.socket):
         action = ACTION.LOGIN
         tag = Tag(id=self.user.id, name=self.user.name, key=self.user.key, action=action)
         
-        soc_resp = SEND(self, tag)
+        soc_resp = self.send_tag(tag)
         if soc_resp in SOCKETS: return soc_resp
         
-        response_tag = RECV(self)
+        response_tag = self.recv_tag()
         if response_tag in SOCKETS: return soc_resp
 
         if response_tag in SOCKETS: return
@@ -163,13 +167,13 @@ class Client(socket.socket):
         return response
     
     def logout(self):
-        soc_resp = SEND(self, Tag(action=ACTION.LOGOUT))
+        soc_resp = self.send_tag(Tag(action=ACTION.LOGOUT))
         self.close()
         return soc_resp
 
     def start_session(self):
         while True:
-            tag = RECV(self)
+            tag = self.recv_tag()
             if tag in SOCKETS: return
 
             if len(tag) == 1 and 'response' in tag:
@@ -185,9 +189,9 @@ class Client(socket.socket):
     
     def send_chat(self, recipient, data, chat, type):
         tag = Tag(recipient=recipient, data=data, chat=chat, type=type)
-        return SEND(self, tag)
+        return self.send_tag(tag)
 
-    def send_status(self, tag): return SEND(self, Tag(action=ACTION.STATUS))
+    def send_status(self, tag): return self.send_tag(Tag(action=ACTION.STATUS))
 
     def recv_chat(self, tag): self.user.chats_manager.add(tag)
 

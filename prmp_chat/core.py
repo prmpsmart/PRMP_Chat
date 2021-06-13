@@ -1,8 +1,12 @@
 import enum, json, threading, datetime, socket
 
+class Base_All:
+    def __repr__(self): return f'<{self}>'
+
+
 # Enums 
 
-class BASE_ENUM(enum.Enum):
+class BASE_ENUM(Base_All, enum.Enum):
 
     def __eq__(self, other):
         if isinstance(other, str): return self.name == other.upper()
@@ -97,7 +101,7 @@ class SOCKET(BASE_ENUM):
     CLOSED = 'CLOSED'
     ALIVE = 'ALIVE'
 
-class Tag(dict):
+class Tag(Base_All, dict):
 
     def __init__(self, **kwargs):
         if 'action' in kwargs:
@@ -165,46 +169,51 @@ class Tag(dict):
 
 SOCKETS = (SOCKET.RESET, SOCKET.CLOSED)
 
+class Sock(Base_All):
 
-def RECV(sock, buffer=1024):
-    try:
-        encoded = sock.recv(buffer)
-        if not encoded: raise OSError
-        
-        tag = Tag.decode(encoded)
-
-        if tag.alive is SOCKET.ALIVE:
-            print('SERVER CHECK', tag, end='\r')
-            tag = RECV(sock, buffer)
-
-        return tag
-
-    except socket.error:
-        # An existing connection was forcibly closed by the remote client.
-        # The terminal of the client socket was terminated.] or closed.
-        return SOCKET.RESET
-
-    except OSError:
-        # An operation was attempted on something that is not a socket.
-        # The client socket call close()
-        return SOCKET.CLOSED
-
-def SEND(sock, tag, func=None):
-    try: return sock.send(tag.encode)
+    def __init__(self, socket=None):
+        self.socket = socket or self
+        self.shutdown = self.socket.shutdown
     
-    except socket.error:
-        # An existing connection was forcibly closed by the remote client.
-        # The terminal of the client socket was terminated.] or closed.
-        return SOCKET.RESET
+    def _close(self):
+        self.socket.shutdown(0)
+        self.socket.close()
+    
+    def catch(self, func):
+        try: return func()
 
-    except OSError:
-        # An operation was attempted on something that is not a socket.
-        # The client socket call close()
-        return SOCKET.CLOSED
+        except ConnectionResetError:
+            # An existing connection was forcibly closed by the remote client.
+            # The terminal of the client socket was terminated.] or closed.
+            return SOCKET.RESET
 
-def SENDALL(socket, tag): socket.sendall(tag.encode)
+        except OSError:
+            # An operation was attempted on something that is not a socket.
+            # The client socket call close()
+            return SOCKET.CLOSED
+
+    def recv_tag(self, buffer=1024):
+        def func():
+            encoded = self.socket.recv(buffer)
+            if not encoded: raise OSError
+            
+            tag = Tag.decode(encoded)
+
+            if tag.alive is SOCKET.ALIVE:
+                print('SERVER CHECK', tag, end='\r')
+                return func(buffer)
+            return tag
+        return self.catch(func)
+
+    def send_tag(self, tag): return self.catch(lambda:self.socket.send(tag.encode))
+
+    def sendall_tag(self, tag):
+        def func(): return self.socket.sendall(tag.encode)
+        return self.catch(func)
+
 
 def EXISTS(manager, obj): return RESPONSE.EXIST if obj in manager else RESPONSE.EXTINCT
+
 
 def THREAD(func, *args, **kwargs): threading.Thread(target=func, args=args, kwargs=kwargs).start()
 
@@ -221,7 +230,7 @@ def DATE_TIME(date_time=None, tup=1):
 # Bases
 
 
-class Base:
+class Base(Base_All):
 
     @property
     def className(self): return self.__class__.__name__
@@ -261,5 +270,6 @@ class User(Base):
     def change_status(self, status):
         self.status = status
         if status is STATUS.OFFLINE: self.last_seen = DATE_TIME()
+
 
 

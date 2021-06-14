@@ -4,6 +4,7 @@ __pycache__
 media
 research
 *.pyd
+imgs
 prmp_apps
 rsc
 Telegram

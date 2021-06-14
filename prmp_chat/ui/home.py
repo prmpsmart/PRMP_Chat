@@ -1,11 +1,20 @@
 
-# from prmp_lib.prmp_gui.windows import *
-# from prmp_lib.prmp_gui.core_tk import *
-# from prmp_lib.prmp_miscs.prmp_images import *
+from prmp_lib.prmp_gui.windows import *
+from prmp_lib.prmp_gui.core_tk import *
+# from prmp_lib.prmp_gui.core_ttk import *
+from prmp_lib.prmp_miscs.prmp_images import *
 
 # import lib.prmp_miscs
-from gui import *
+# from gui import Button, Frame, Tk, PRMP_Image, Label, Entry, PanedWindow
 
+
+class Pic_Btn(Button):
+    def __init__(self, master, image=None, resize=(20, 20), imgkwargs={}, **kwargs):
+        imgkwargs['resize'] = resize
+        if image: image = PRMP_Image(image, for_tk=1, **imgkwargs)
+        Button.__init__(self, master, image=image,  relief='flat', overrelief='flat', **kwargs)
+    
+    # def 
 
 
 class Chat_Listing(Frame):
@@ -24,20 +33,20 @@ class Chat_Room(Frame):
 
 
     def load_widgets(self):
-        self.header = Frame(self, place=dict(relx=0, rely=0, relw=1, relh=.06), relief='flat', borderwidth=0, background='black')
+        self.header = Frame(self, place=dict(relx=0, rely=0, relw=1, relh=.06), relief='flat', bd=0)
 
         self.title = Label(self.header, text=self._title, font=dict(family='Times New Roman', weight='bold', size=20))
 
 
-        self.footer = Frame(self, relief='flat', borderwidth=0, background='black')
+        self.footer = Frame(self, relief='flat', bd=0)
 
-        self.links = Button(self.footer, place=dict(relx=0, y=0, w=40, relh=1), relief='flat', borderwidth=0, background='white')
+        self.links = Pic_Btn(self.footer, image='imgs/input_attach.png', place=dict(relx=0, y=0, w=40, relh=1), bd=0, resize=(40, 40))
         
-        self.text = Entry(self.footer, placeholder='Write something here to send.', relief='flat', borderwidth=0)
+        self.text = Text(self.footer, placeholder='Write something here to send.', bd=0, relief='flat', font='')
         
-        self.emojis = Button(self.footer, relief='flat', borderwidth=0, background='white')
+        self.emojis = Pic_Btn(self.footer, bd=0)
 
-        self.audio_text = Button(self.footer, relief='flat', borderwidth=0, background='white')
+        self.audio_text = Pic_Btn(self.footer, bd=0)
         
         self.after(100, self.configure_imputs)
         self.bind('<Configure>', self.configure_imputs)
@@ -71,14 +80,14 @@ class Chat_Room(Frame):
 
 
 class Home(Tk):
-    def __init__(self, geo=(1300, 750), **kwargs):
-        Tk.__init__(self, asb=0, atb=0, tm=0, geo=geo, ntb=0, be=1, resize=(0, 0), alpha=1, **kwargs)
+    def __init__(self, geo=(1300, 750), themeIndex=53, **kwargs):
+        Tk.__init__(self, asb=0, atb=0, tm=0, geo=geo, ntb=0, be=1, themeIndex=themeIndex, resize=(0, 0), alpha=1, **kwargs)
 
         self.container['relief'] = 'flat'
 
         fr = Frame(self.cont, place=dict(x=0, y=0, w=70, relh=1), background='red')
         
-        Button(fr, place=dict(x=10, y=5, w=45, h=35), background='red', image=PRMP_Image('imgs/dialogs_menu.png', for_tk=1, resize=(20, 20)), compound='top', relief='flat')
+        Pic_Btn(fr, place=dict(x=10, y=5, w=45, h=35), background='red', image='imgs/dialogs_menu.png', compound='top')
 
         w = geo[0] - 70
 
@@ -87,13 +96,13 @@ class Home(Tk):
 
         w /= 3
 
-        self.contact_pane = Chat_Room(pane, background='orange', title='Chats')
+        self.contact_pane = Chat_Room(pane, title='Chats')
         pane.add(self.contact_pane, width=w)
 
-        self.group_pane = Chat_Room(pane, background='green', title='Groups')
+        self.group_pane = Chat_Room(pane, title='Groups')
         pane.add(self.group_pane, width=w)
 
-        self.channel_pane = Chat_Room(pane, background='brown', title='Channels')
+        self.channel_pane = Chat_Room(pane, title='Channels')
         pane.add(self.channel_pane)
 
 

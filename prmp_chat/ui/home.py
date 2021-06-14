@@ -1,5 +1,10 @@
 
-from prmp_lib.prmp_gui import *
+# from prmp_lib.prmp_gui.windows import *
+# from prmp_lib.prmp_gui.core_tk import *
+# from prmp_lib.prmp_miscs.prmp_images import *
+
+# import lib.prmp_miscs
+from gui import *
 
 
 
@@ -19,20 +24,20 @@ class Chat_Room(Frame):
 
 
     def load_widgets(self):
-        self.header = Frame(self, place=dict(relx=0, rely=0, relw=1, relh=.06), background='black', relief='flat', borderwidth=0)
+        self.header = Frame(self, place=dict(relx=0, rely=0, relw=1, relh=.06), relief='flat', borderwidth=0, background='black')
 
         self.title = Label(self.header, text=self._title, font=dict(family='Times New Roman', weight='bold', size=20))
 
 
-        self.footer = Frame(self, background='black', relief='flat', borderwidth=0)
+        self.footer = Frame(self, relief='flat', borderwidth=0, background='black')
 
-        self.links = Button(self.footer, background='white', place=dict(relx=0, y=0, w=40, relh=1), relief='flat', borderwidth=0)
+        self.links = Button(self.footer, place=dict(relx=0, y=0, w=40, relh=1), relief='flat', borderwidth=0, background='white')
         
         self.text = Entry(self.footer, placeholder='Write something here to send.', relief='flat', borderwidth=0)
         
-        self.emojis = Button(self.footer, background='white', relief='flat', borderwidth=0)
+        self.emojis = Button(self.footer, relief='flat', borderwidth=0, background='white')
 
-        self.audio_text = Button(self.footer, background='white', relief='flat', borderwidth=0)
+        self.audio_text = Button(self.footer, relief='flat', borderwidth=0, background='white')
         
         self.after(100, self.configure_imputs)
         self.bind('<Configure>', self.configure_imputs)

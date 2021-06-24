@@ -1,4 +1,5 @@
-import enum, json, threading, datetime, socket
+import enum, json, threading, socket
+from PySide6.QtCore import QDateTime
 
 class Base_All:
     def __repr__(self): return f'<{self}>'
@@ -113,6 +114,9 @@ class Tag(Base_All, dict):
         if 'alive' in kwargs:
             alive = kwargs['alive']
             kwargs['alive'] = SOCKET[alive]
+        if 'date_time' in kwargs:
+            date_time = kwargs['date_time']
+            if isinstance(date_time, int): kwargs['date_time'] = DATE_TIME(date_time)
 
         dict.__init__(self, **kwargs)
 
@@ -128,7 +132,8 @@ class Tag(Base_All, dict):
         _dict = {}
 
         for k, v in self.items():
-            if not isinstance(v, str): v = v.value
+            if k == 'date_time': v = DATE_TIME(v)
+            elif isinstance(v, BASE_ENUM): v = v.value
             _dict[k] = v
 
         string = json.dumps(_dict)
@@ -217,15 +222,18 @@ def EXISTS(manager, obj): return RESPONSE.EXIST if obj in manager else RESPONSE.
 
 def THREAD(func, *args, **kwargs): threading.Thread(target=func, args=args, kwargs=kwargs).start()
 
-def DATE_TIME(date_time=None, tup=1):
+def DATE_TIME(date_time=None, _int=1):
     if date_time is None:
-        date_time = datetime.datetime.now()
-        if tup: return DATE_TIME(date_time)
+        date_time = QDateTime.currentDateTime()
+        if _int: return DATE_TIME(date_time)
         else: return date_time
 
-    if isinstance(date_time, (tuple, list)): return datetime.datetime(*date_time)
+    if isinstance(date_time, int): return QDateTime.fromSecsSinceEpoch(date_time)
 
-    else: return (date_time.year, date_time.month, date_time.day, date_time.hour, date_time.minute, date_time.second)
+    else: return date_time.toSecsSinceEpoch()
+
+def TIME(dateTime): return dateTime.toString("HH:mm:ss")
+def DATE(dateTime): return dateTime.toString("yyyy-MM-dd")
 
 # Bases
 
@@ -235,8 +243,9 @@ class Base(Base_All):
     @property
     def className(self): return self.__class__.__name__
 
-    def __init__(self, id, name='', date_time=None):
+    def __init__(self, id, name='', icon=None, date_time=None):
         self.id = id
+        self.icon = icon
         self.name = name
         self.date_time = date_time
     
@@ -270,6 +279,13 @@ class User(Base):
     def change_status(self, status):
         self.status = status
         if status is STATUS.OFFLINE: self.last_seen = DATE_TIME()
+    
+    def add_user(self, user):
+        if user.id not in self.users: self.users[user.id] = user
+    def add_group(self, group):
+        if group.id not in self.groups: self.groups[group.id] = group
+    def add_channel(self, channel):
+        if channel.id not in self.channels: self.channels[channel.id] = channel
 
 
 

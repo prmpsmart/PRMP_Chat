@@ -1,11 +1,14 @@
 
 # code to automate the download of github branches
-import requests
+import requests, os
 
 def download_branch(user, repo, branch, dest=''):
 
     if dest: dest = dest+'/'
     filename = f'{dest}{repo}-{branch}.zip'
+    if os.path.exists(filename):
+        print(f'Already downloaded {filename}')
+        return
     url = f'https://codeload.github.com/{user}/{repo}/zip/refs/heads/{branch}'
 
     print('Download of', filename, 'started.')
@@ -15,7 +18,7 @@ def download_branch(user, repo, branch, dest=''):
     elif response.content:
         file = open(filename, 'wb')
         file.write(response.content)
-        print('Download of', filename, 'finished.')
+        print('Download of', filename, 'finished.', end='\r')
 
 
 
@@ -25,4 +28,4 @@ user = 'iamshaunjp'
 repository = 'flutter-beginners-tutorial'
 branch = 'lesson-%d'
 
-for num in range(10, 36): download_branch(user, repository, branch%num, dest=r'C:\Users\Administrator\Coding_Projects\Dart\Flutter Tutorial for Beginners\codes')
+for num in range(4, 36): download_branch(user, repository, branch%num, dest=r'C:\Users\Administrator\Coding_Projects\Dart\Flutter\flutter_tutorial_for_bginners')

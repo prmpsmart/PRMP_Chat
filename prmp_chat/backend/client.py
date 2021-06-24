@@ -15,27 +15,47 @@ class Client_Multi_Users(Multi_Users):
     def add_chat(self, tag):
         if tag.sender in self.admins or self.only_admin is False: self.chats[len(self.chats)] = tag
 
-class Client_Group(Client_Multi_Users): ...
+class Client_Group(Client_Multi_Users): type = 'group'
 
-class Client_Channel(Client_Multi_Users): only_admin = True
+class Client_Channel(Client_Multi_Users):
+    only_admin = True
+    type = 'channel'
 
 
 # User
 
+
+
 class Private_Chat(Base_All):
+    type = 'private'
+
     def __init__(self, user, recipient):
         self.user = user
         self.recipient = recipient
-        self.chats = {}
+        self.chats = []
         self.unread_chats = []
         self.last_time = None
     
+    @property
+    def id(self): return self.recipient.id
+
+    @property
+    def icon(self): return self.recipient.icon
+
+    @property
+    def name(self): return self.recipient.name
+
+    @property
+    def lastChat(self): return self.chats[-1]
+    
     def add_chat(self, tag):
-        self.chats[len(self.chats)] = tag
-        self.last_time = datetime.datetime.now()
+        self.chats.append(tag)
+        self.last_time = QDateTime.currentDateTime()
     
     def dispense(self):
         for chat in self.unread_chats: self.add_chat(chat)
+    
+    def __str__(self): return f'Private_Chat({self.recipient})'
 
 class Chats_Manager(Base_All):
 
@@ -46,23 +66,23 @@ class Chats_Manager(Base_All):
         self.unseen_chats = []
         self.unsent_chats = []
     
+    def add_private_chat(self, user):
+        private_chat = Private_Chat(self.user, user)
+        self.private_chats[user.id] = private_chat
+    
     def add_chat(self, tag):
         recipient = tag.recipient
-        if recipient == self.user.id: recipient = tag.sender
         
         if self.user.status is STATUS.ONLINE:
-            if recipient in self.user.users:
-                if recipient in self.private_chats: self.private_chats[recipient].add_chat(tag)
-                else:
-                    private_chat = Private_Chat(self.user, recipient)
-                    private_chat.add_chat(tag)
-                    self.private_chats[recipient] = private_chat
+            id = tag.sender if recipient == self.user.id else tag.recipient
 
-            elif recipient in self.user.groups:
-                group = self.user.groups[recipient]
+            if id in self.user.users: self.private_chats[id].add_chat(tag)
+
+            elif id in self.user.groups:
+                group = self.user.groups[id]
                 group.add_chat(tag)
-            elif recipient in self.user.channels:
-                channel = self.user.channels[recipient]
+            elif id in self.user.channels:
+                channel = self.user.channels[id]
                 channel.add_chat(tag)
 
         elif self.user.id == recipient: self.unseen_chats.append(tag)
@@ -79,12 +99,26 @@ class Chats_Manager(Base_All):
                 self.unsent_chats.remove(chat)
                 self.add_chat(chat)
 
+
+class Other_User(User):
+    this = False
+    def __init__(self, **kwargs):
+        ...
+
+
 class Client_User(User):
     'User on the client side.'
+    this = True
 
     def __init__(self, **kwargs):
         User.__init__(self, **kwargs)
         self.chats = Chats_Manager(self)
+
+        self.add_chat = self.chats.add_chat
+    
+    def add_user(self, user):
+        super().add_user(user)
+        self.chats.add_private_chat(user)
 
 class Socket(socket.socket, Sock):
     def __init__(self, *args, **kwargs):

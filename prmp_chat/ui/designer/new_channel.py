@@ -48,7 +48,7 @@ class Ui_NewChannelDialog(object):
         self.pushButton_6.setStyleSheet(u"\n"
 " QPushButton{\n"
 "	border: 1px solid;\n"
-"	border-radius: 40px ;\n"
+"	border-radius: 8px ;\n"
 "    background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,\n"
 "                                        stop: 0 rgb(170, 132, 57), stop: 1 rgb(234, 183, 78));\n"
 "	color:  rgb(20, 36, 43)\n"

@@ -224,9 +224,8 @@ class Session:
     def start_session(self):
         self.user.change_status(STATUS.ONLINE)
 
+        self.LOG(f'Listening to {self.user}')#, end='\r')
         while True:
-
-            self.LOG(f'Listening to {self.user}')#, end='\r')
 
             tag = self.client.recv_tag()
 
@@ -263,61 +262,67 @@ class Response_Server:
         self.users_sessions = {}
 
     def add(self, client, from_signup=False):
-        tag = client.recv_tag()
-        
-        if tag in SOCKETS: return
-        
-        action = ACTION[tag.action]
 
-        LOG = lambda val: self.LOG(f'{client} -> ACTION.{action} -> RESPONSE.{val}')
-
-        if not from_signup: self.LOG(client, 'connected!')
-
-        if action is ACTION.SIGNUP:
-
-            response = Users.create(*tag['id', 'name'], key=tag.key)
+        while True:
+            tag = client.recv_tag()
             
-            LOG(response)
-            soc_resp = client.send_tag(Tag(response=response))
-            if soc_resp in SOCKETS: return
+            if tag in SOCKETS: return
             
-            if response is RESPONSE.SUCCESSFUL:
-                user = Users.OBJS[tag.id]
-                self.add(client, from_signup=1)
+            action = ACTION[tag.action]
 
-        elif action is ACTION.LOGIN:
-            response = Users.exists(tag.id)
+            LOG = lambda val: self.LOG(f'{client} -> {action} -> {val}')
 
-            if response is RESPONSE.EXIST:
-                user = Users.OBJS[tag.id]
+            if not from_signup: self.LOG(client, 'connected!')
 
-                if user.id in self.users or user.status is STATUS.ONLINE: response = RESPONSE.SIMULTANEOUS_LOGIN
+            if action is ACTION.SIGNUP:
 
-                elif user.key == tag.key:
-                    response = RESPONSE.SUCCESSFUL
-                    client.user = user
+                response = Users.create(*tag['id', 'name'], key=tag.key)
+                
+                LOG(response)
+                soc_resp = client.send_tag(Tag(response=response))
+                if soc_resp in SOCKETS: return
+                
+                if response is RESPONSE.SUCCESSFUL:
+                    user = Users.OBJS[tag.id]
+                    self.add(client, from_signup=1)
 
-                else: response = RESPONSE.FALSE_KEY
-            
-            LOG(response)
-            soc_resp = client.send_tag(Tag(response=response))
-            if soc_resp in SOCKETS: return soc_resp
+            elif action is ACTION.LOGIN:
+                response = Users.exists(tag.id)
 
-            if response is RESPONSE.SUCCESSFUL:
-                session = Session(self, client)
+                if response is RESPONSE.EXIST:
+                    user = Users.OBJS[tag.id]
 
-                self.sessions[str(session)] = session
-                self.users[user.id] = user
-                self.users_sessions[user.id] = session
+                    if user.id in self.users or user.status is STATUS.ONLINE: response = RESPONSE.SIMULTANEOUS_LOGIN
+
+                    elif user.key == tag.key:
+                        response = RESPONSE.SUCCESSFUL
+                        client.user = user
+
+                    else: response = RESPONSE.FALSE_KEY
+                
+                LOG(response)
+                soc_resp = client.send_tag(Tag(response=response))
+                if soc_resp in SOCKETS: return soc_resp
+
+                if response is RESPONSE.SUCCESSFUL:
+                    session = Session(self, client)
+
+                    self.sessions[str(session)] = session
+                    self.users[user.id] = user
+                    self.users_sessions[user.id] = session
+                    # self.server.online_clients[str(session)] = session
+                    break
 
     def remove(self, session):
 
-        if str(session) in self.sessions: del self.sessions[str(session)]
+        str_sess = str(session)
+        if str_sess in self.sessions: del self.sessions[str_sess]
         id = session.user.id
+        session.user.change_status(STATUS.OFFLINE)
         if id in self.users: del self.users[id]
         if id in self.users_sessions: del self.users_sessions[id]
 
-        self.server.remove(session.client)
+        # self.server.remove(session.client)
 
 
 class Server(Base_All, socket.socket):
@@ -341,6 +346,7 @@ class Server(Base_All, socket.socket):
         self.LOG = LOG
 
         self.connections = {}
+        self.online_clients = {}
 
         self.max_client = max_client or 10
         self.response_server = Response_Server(self)
@@ -357,12 +363,14 @@ class Server(Base_All, socket.socket):
     def accept(self): return  Client_Socket(socket.socket.accept(self))
 
     def set_online_clients(self):
-        connections = self.connections.copy()
+        connections = self.online_clients.copy()
 
         for conn, _conn in connections.items():
-            response = _conn.send(Tag(alive=SOCKET.ALIVE))
+            response = _conn.send_tag(Tag(alive=SOCKET.ALIVE))
 
-            if str(response) != '18': del self.connections[conn]
+            if str(response) != '18':
+                _conn.user.change_status(STATUS.OFFLINE)
+                del self.online_clients[conn]
 
         time.sleep(1)
         self.set_online_clients()
@@ -374,16 +382,18 @@ class Server(Base_All, socket.socket):
         while True:
             client = self.accept()
 
-            self.connections[str(client)] = client
+            # self.connections[str(client)] = client
             
             # self.response_server.add(client)
             THREAD(self.response_server.add, client)
 
-            self.LOG(f'TOTAL OF {self.connected} CLIENTS ARE ONLINE')
+            self.connected_clients()
 
-    def remove(self, client):
-        if str(client) in self.connections: del self.connections[str(client)]
-        self.LOG(f'TOTAL OF {self.connected} CLIENTS ARE ONLINE')
+    # def remove(self, client):
+    #     if str(client) in self.online_clients: del self.online_clients[str(client)]
+    #     self.connected_clients()
+    
+    def connected_clients(self): self.LOG(f'TOTAL OF {self.connected} CLIENTS ARE ONLINE')
 
 
 

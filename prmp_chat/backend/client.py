@@ -33,8 +33,8 @@ class Private_Chat(Base_All):
         self.user = user
         self.recipient = recipient
         self.chats = []
-        self.unread_chats = []
-        self.last_time = None
+        self.unread_chats = 0
+        self.last_time = QDateTime.currentDateTime()
     
     @property
     def id(self): return self.recipient.id
@@ -46,14 +46,18 @@ class Private_Chat(Base_All):
     def name(self): return self.recipient.name
 
     @property
-    def lastChat(self): return self.chats[-1]
+    def lastChat(self):
+        if self.chats: return self.chats[-1]
     
     def add_chat(self, tag):
-        self.chats.append(tag)
         self.last_time = QDateTime.currentDateTime()
+
+        if tag.sender == self.recipient.id: self.unread_chats += 1
+        else:
+            if self.user.status is not STATUS.ONLINE: tag.sent = False
+        self.chats.append(tag)
     
-    def dispense(self):
-        for chat in self.unread_chats: self.add_chat(chat)
+    def read(self): self.unread_chats = 0
     
     def __str__(self): return f'Private_Chat({self.recipient})'
 
@@ -63,8 +67,8 @@ class Chats_Manager(Base_All):
         self.user = user
         self.private_chats = {}
         
-        self.unseen_chats = []
-        self.unsent_chats = []
+        self.groups = self.user.groups
+        self.channels = self.user.channels
     
     def add_private_chat(self, user):
         private_chat = Private_Chat(self.user, user)
@@ -73,21 +77,17 @@ class Chats_Manager(Base_All):
     def add_chat(self, tag):
         recipient = tag.recipient
         
-        if self.user.status is STATUS.ONLINE:
-            id = tag.sender if recipient == self.user.id else tag.recipient
+        id = tag.sender if recipient == self.user.id else tag.recipient
 
-            if id in self.user.users: self.private_chats[id].add_chat(tag)
+        if id in self.user.users: self.private_chats[id].add_chat(tag)
 
-            elif id in self.user.groups:
-                group = self.user.groups[id]
-                group.add_chat(tag)
-            elif id in self.user.channels:
-                channel = self.user.channels[id]
-                channel.add_chat(tag)
+        elif id in self.groups:
+            group = self.groups[id]
+            group.add_chat(tag)
+        elif id in self.channels:
+            channel = self.channels[id]
+            channel.add_chat(tag)
 
-        elif self.user.id == recipient: self.unseen_chats.append(tag)
-        else: self.unsent_chats.append(tag)
-    
     def dispense(self):
         if self.unseen_chats:
             for chat in self.unseen_chats:
@@ -102,8 +102,6 @@ class Chats_Manager(Base_All):
 
 class Other_User(User):
     this = False
-    def __init__(self, **kwargs):
-        ...
 
 
 class Client_User(User):
@@ -157,46 +155,37 @@ class Client(Socket):
             self.LOG(soc_resp)
             return soc_resp
 
-        print('HERE')
         response_tag = self.recv_tag()
         if response_tag in SOCKETS:
-            print('HERE')
             self.LOG(response_tag)
             return response_tag
 
         response = response_tag.response
 
-        self.LOG(f'{action} -> RESPONSE.{response}')
+        self.LOG(f'{action} -> {response}')
 
         if response is RESPONSE.SUCCESSFUL:
             self.user = Client_User(id=id, name=name, key=key)
-            return self.login()
 
-    def login(self):
+
+    def login(self, id, key):
         if not self.connected: self._connect()
         self.LOG('LOGGING IN.')
         
         action = ACTION.LOGIN
-        tag = Tag(id=self.user.id, name=self.user.name, key=self.user.key, action=action)
+        tag = Tag(id=id, key=key, action=action)
         
         soc_resp = self.send_tag(tag)
+        print('send')
         if soc_resp in SOCKETS: return soc_resp
         
         response_tag = self.recv_tag()
+        print('recv')
         if response_tag in SOCKETS: return soc_resp
-
-        if response_tag in SOCKETS: return
 
         response = response_tag.response
 
-        self.LOG(f'{action} -> RESPONSE.{response}')
-
-        if response is RESPONSE.SUCCESSFUL:
-            # starts the session
-            # THREAD(self.start_session)
-            ...
-            self.LOG('WAITING')
-            while 1: ...
+        self.LOG(f'{action} -> {response}')
         
         return response
     

@@ -143,7 +143,7 @@ class Tag(Base_All, dict):
     @classmethod
     def decode(self, data) -> dict:
         decoded = data.decode()
-        _dict = json.loads(data) if data else {}
+        _dict = json.loads(decoded) if data else {}
         return Tag(**_dict)
     
     @property

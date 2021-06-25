@@ -17,15 +17,15 @@ class Ui_SideDialog(object):
     def setupUi(self, SideDialog):
         if not SideDialog.objectName():
             SideDialog.setObjectName(u"SideDialog")
-        SideDialog.resize(260, 384)
+        SideDialog.resize(303, 334)
         sizePolicy = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.MinimumExpanding)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(SideDialog.sizePolicy().hasHeightForWidth())
         SideDialog.setSizePolicy(sizePolicy)
         SideDialog.setMinimumSize(QSize(200, 0))
-        SideDialog.setMaximumSize(QSize(260, 384))
-        SideDialog.setStyleSheet(u"QWidget {background:rgb(20, 36, 43); color: white}\n"
+        SideDialog.setMaximumSize(QSize(350, 384))
+        SideDialog.setStyleSheet(u"QWidget {background:rgb(20, 36, 43); color: rgb(234, 183, 78)}\n"
 "\n"
 " QPushButton{\n"
 "	border: 1px solid;\n"
@@ -43,31 +43,31 @@ class Ui_SideDialog(object):
 "\n"
 "")
         self.verticalLayout_2 = QVBoxLayout(SideDialog)
-        self.verticalLayout_2.setSpacing(0)
+        self.verticalLayout_2.setSpacing(12)
         self.verticalLayout_2.setObjectName(u"verticalLayout_2")
         self.verticalLayout_2.setContentsMargins(0, 0, 0, 0)
         self.frame = QFrame(SideDialog)
         self.frame.setObjectName(u"frame")
-        self.frame.setMinimumSize(QSize(260, 100))
-        self.frame.setMaximumSize(QSize(16777215, 100))
+        self.frame.setMinimumSize(QSize(260, 130))
+        self.frame.setMaximumSize(QSize(16777215, 150))
         self.frame.setAutoFillBackground(False)
         self.frame.setStyleSheet(u"")
-        self.frame.setFrameShape(QFrame.Box)
-        self.frame.setFrameShadow(QFrame.Raised)
-        self.frame.setLineWidth(2)
-        self.frame.setMidLineWidth(1)
-        self.pushButton_5 = QPushButton(self.frame)
-        self.pushButton_5.setObjectName(u"pushButton_5")
-        self.pushButton_5.setGeometry(QRect(210, 10, 40, 30))
-        self.pushButton_5.setStyleSheet(u"")
-        self.pushButton_5.setFlat(True)
-        self.pushButton_6 = QPushButton(self.frame)
-        self.pushButton_6.setObjectName(u"pushButton_6")
-        self.pushButton_6.setGeometry(QRect(10, 10, 80, 80))
-        self.pushButton_6.setStyleSheet(u"\n"
+        self.frame.setFrameShape(QFrame.NoFrame)
+        self.frame.setFrameShadow(QFrame.Plain)
+        self.frame.setLineWidth(3)
+        self.frame.setMidLineWidth(0)
+        self.editButton = QPushButton(self.frame)
+        self.editButton.setObjectName(u"editButton")
+        self.editButton.setGeometry(QRect(240, 90, 40, 30))
+        self.editButton.setStyleSheet(u"")
+        self.editButton.setFlat(True)
+        self.iconButton = QPushButton(self.frame)
+        self.iconButton.setObjectName(u"iconButton")
+        self.iconButton.setGeometry(QRect(10, 10, 80, 80))
+        self.iconButton.setStyleSheet(u"\n"
 " QPushButton{\n"
 "	border: 1px solid;\n"
-"	border-radius: 40px ;\n"
+"	border-radius: 8px ;\n"
 "    background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,\n"
 "                                        stop: 0 rgb(170, 132, 57), stop: 1 rgb(234, 183, 78));\n"
 "	color:  rgb(20, 36, 43)\n"
@@ -82,13 +82,38 @@ class Ui_SideDialog(object):
 "\n"
 "\n"
 "")
-        self.pushButton_6.setAutoDefault(False)
-        self.pushButton_6.setFlat(False)
+        self.iconButton.setAutoDefault(False)
+        self.iconButton.setFlat(False)
+        self.lastLoginLabel = QLabel(self.frame)
+        self.lastLoginLabel.setObjectName(u"lastLoginLabel")
+        self.lastLoginLabel.setGeometry(QRect(100, 60, 181, 21))
+        font = QFont()
+        font.setFamily(u"Times New Roman")
+        font.setPointSize(10)
+        font.setBold(False)
+        self.lastLoginLabel.setFont(font)
+        self.lastLoginLabel.setStyleSheet(u"color: #34aa1f")
+        self.nameLabel = QLabel(self.frame)
+        self.nameLabel.setObjectName(u"nameLabel")
+        self.nameLabel.setGeometry(QRect(100, 10, 171, 31))
+        font1 = QFont()
+        font1.setFamily(u"Times New Roman")
+        font1.setPointSize(14)
+        font1.setUnderline(True)
+        self.nameLabel.setFont(font1)
+        self.lastLoginLabel_2 = QLabel(self.frame)
+        self.lastLoginLabel_2.setObjectName(u"lastLoginLabel_2")
+        self.lastLoginLabel_2.setGeometry(QRect(100, 40, 141, 21))
+        font2 = QFont()
+        font2.setFamily(u"Times New Roman")
+        font2.setPointSize(11)
+        font2.setBold(True)
+        self.lastLoginLabel_2.setFont(font2)
 
         self.verticalLayout_2.addWidget(self.frame)
 
         self.verticalLayout = QVBoxLayout()
-        self.verticalLayout.setSpacing(12)
+        self.verticalLayout.setSpacing(5)
         self.verticalLayout.setObjectName(u"verticalLayout")
         self.verticalLayout.setContentsMargins(20, 4, 20, 4)
         self.newContactButton = QPushButton(SideDialog)
@@ -113,33 +138,37 @@ class Ui_SideDialog(object):
 
         self.verticalLayout.addWidget(self.newChannelButton)
 
-        self.settingsButton = QPushButton(SideDialog)
-        self.settingsButton.setObjectName(u"settingsButton")
-        self.settingsButton.setMinimumSize(QSize(0, 40))
-        self.settingsButton.setStyleSheet(u"")
-        self.settingsButton.setFlat(True)
-
-        self.verticalLayout.addWidget(self.settingsButton)
-
 
         self.verticalLayout_2.addLayout(self.verticalLayout)
 
-        self.textBrowser = QTextBrowser(SideDialog)
-        self.textBrowser.setObjectName(u"textBrowser")
-        self.textBrowser.setMaximumSize(QSize(16777215, 80))
-        self.textBrowser.setStyleSheet(u"")
+        self.plainTextEdit = QPlainTextEdit(SideDialog)
+        self.plainTextEdit.setObjectName(u"plainTextEdit")
+        self.plainTextEdit.setMinimumSize(QSize(0, 40))
+        self.plainTextEdit.setMaximumSize(QSize(16777215, 40))
+        font3 = QFont()
+        font3.setFamily(u"Times New Roman")
+        font3.setPointSize(16)
+        font3.setBold(True)
+        font3.setUnderline(True)
+        font3.setStrikeOut(False)
+        font3.setKerning(False)
+        font3.setStyleStrategy(QFont.NoAntialias)
+        self.plainTextEdit.setFont(font3)
+        self.plainTextEdit.setStyleSheet(u"")
+        self.plainTextEdit.setFrameShape(QFrame.NoFrame)
+        self.plainTextEdit.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.plainTextEdit.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
-        self.verticalLayout_2.addWidget(self.textBrowser)
+        self.verticalLayout_2.addWidget(self.plainTextEdit)
 
 
         self.retranslateUi(SideDialog)
 
-        self.pushButton_5.setDefault(True)
-        self.pushButton_6.setDefault(True)
+        self.editButton.setDefault(True)
+        self.iconButton.setDefault(True)
         self.newContactButton.setDefault(False)
         self.newGroupButton.setDefault(False)
         self.newChannelButton.setDefault(False)
-        self.settingsButton.setDefault(False)
 
 
         QMetaObject.connectSlotsByName(SideDialog)
@@ -147,11 +176,14 @@ class Ui_SideDialog(object):
 
     def retranslateUi(self, SideDialog):
         SideDialog.setWindowTitle(QCoreApplication.translate("SideDialog", u"Dialog", None))
-        self.pushButton_5.setText(QCoreApplication.translate("SideDialog", u"Edit", None))
-        self.pushButton_6.setText(QCoreApplication.translate("SideDialog", u"Image", None))
+        self.editButton.setText(QCoreApplication.translate("SideDialog", u"Edit", None))
+        self.iconButton.setText(QCoreApplication.translate("SideDialog", u"Image", None))
+        self.lastLoginLabel.setText(QCoreApplication.translate("SideDialog", u"last seen 2021/06/25 at 06:11 PM", None))
+        self.nameLabel.setText(QCoreApplication.translate("SideDialog", u"Apata Miracle Peter", None))
+        self.lastLoginLabel_2.setText(QCoreApplication.translate("SideDialog", u"prmpsmart", None))
         self.newContactButton.setText(QCoreApplication.translate("SideDialog", u"New Contact", None))
         self.newGroupButton.setText(QCoreApplication.translate("SideDialog", u"New Group", None))
         self.newChannelButton.setText(QCoreApplication.translate("SideDialog", u"New Channel", None))
-        self.settingsButton.setText(QCoreApplication.translate("SideDialog", u"Settings", None))
+        self.plainTextEdit.setPlainText(QCoreApplication.translate("SideDialog", u"   PRMP Chat by PRMPSmart   ", None))
     # retranslateUi
 

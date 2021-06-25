@@ -3,6 +3,11 @@ import sys
 sys.path.append(r'C:\Users\Administrator\Coding_Projects\Python\Dev_Workspace\PRMP_Chat\prmp_chat\ui')
 from chatList import ChatList, ChatRoomList
 
+
+import sys
+sys.path.append(r'C:\Users\Administrator\Coding_Projects\Python\Dev_Workspace\PRMP_Chat\prmp_chat\ui')
+from chatList import ChatList, ChatRoomList
+
 # -*- coding: utf-8 -*-
 
 ################################################################################
@@ -22,7 +27,7 @@ class Ui_PRMPChat(object):
     def setupUi(self, PRMPChat):
         if not PRMPChat.objectName():
             PRMPChat.setObjectName(u"PRMPChat")
-        PRMPChat.resize(881, 510)
+        PRMPChat.resize(881, 602)
         PRMPChat.setStyleSheet(u"QWidget {background: rgb(41, 58, 76); color: rgb(41, 58, 76)}\n"
 "\n"
 " QPushButton{\n"
@@ -194,6 +199,18 @@ class Ui_PRMPChat(object):
 
         self.verticalLayout_3.addWidget(self.channelButton)
 
+        self.loginButton = QPushButton(self.frame_2)
+        self.loginButton.setObjectName(u"loginButton")
+        self.loginButton.setMinimumSize(QSize(50, 40))
+
+        self.verticalLayout_3.addWidget(self.loginButton)
+
+        self.signupButton = QPushButton(self.frame_2)
+        self.signupButton.setObjectName(u"signupButton")
+        self.signupButton.setMinimumSize(QSize(50, 40))
+
+        self.verticalLayout_3.addWidget(self.signupButton)
+
         self.verticalSpacer_2 = QSpacerItem(20, 240, QSizePolicy.Minimum, QSizePolicy.Fixed)
 
         self.verticalLayout_3.addItem(self.verticalSpacer_2)
@@ -284,6 +301,8 @@ class Ui_PRMPChat(object):
         self.chatList.setAutoFillBackground(False)
         self.chatList.setStyleSheet(u"border-radius: 4px")
         self.chatList.setLineWidth(0)
+        self.chatList.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.chatList.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.chatList.setEditTriggers(QAbstractItemView.DoubleClicked)
         self.chatList.setDragEnabled(True)
         self.chatList.setDragDropMode(QAbstractItemView.InternalMove)
@@ -314,11 +333,11 @@ class Ui_PRMPChat(object):
         self.frame_4.setFrameShape(QFrame.NoFrame)
         self.frame_4.setFrameShadow(QFrame.Raised)
         self.verticalLayout_2 = QVBoxLayout(self.frame_4)
-        self.verticalLayout_2.setSpacing(0)
+        self.verticalLayout_2.setSpacing(13)
         self.verticalLayout_2.setObjectName(u"verticalLayout_2")
         self.verticalLayout_2.setContentsMargins(2, 0, 0, 0)
         self.horizontalLayout_4 = QHBoxLayout()
-        self.horizontalLayout_4.setSpacing(2)
+        self.horizontalLayout_4.setSpacing(1)
         self.horizontalLayout_4.setObjectName(u"horizontalLayout_4")
         self.roomName = QPushButton(self.frame_4)
         self.roomName.setObjectName(u"roomName")
@@ -358,9 +377,18 @@ class Ui_PRMPChat(object):
 
         self.chatRoomList = ChatRoomList(self.frame_4)
         self.chatRoomList.setObjectName(u"chatRoomList")
-        self.chatRoomList.setMinimumSize(QSize(0, 360))
+        sizePolicy4 = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.MinimumExpanding)
+        sizePolicy4.setHorizontalStretch(0)
+        sizePolicy4.setVerticalStretch(0)
+        sizePolicy4.setHeightForWidth(self.chatRoomList.sizePolicy().hasHeightForWidth())
+        self.chatRoomList.setSizePolicy(sizePolicy4)
+        self.chatRoomList.setMinimumSize(QSize(0, 150))
         self.chatRoomList.setStyleSheet(u"border-radius: 4px")
         self.chatRoomList.setLineWidth(0)
+        self.chatRoomList.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.chatRoomList.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.chatRoomList.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.chatRoomList.setProperty("showDropIndicator", False)
         self.chatRoomList.setDragDropMode(QAbstractItemView.InternalMove)
 
         self.verticalLayout_2.addWidget(self.chatRoomList)
@@ -381,6 +409,7 @@ class Ui_PRMPChat(object):
 
         self.textEdit = QTextEdit(self.frame_4)
         self.textEdit.setObjectName(u"textEdit")
+        self.textEdit.setMinimumSize(QSize(0, 40))
         self.textEdit.setMaximumSize(QSize(16777215, 40))
         font2 = QFont()
         font2.setFamily(u"Times New Roman")
@@ -389,6 +418,11 @@ class Ui_PRMPChat(object):
         self.textEdit.setStyleSheet(u"\n"
 "color: white;\n"
 "border-radius: 2px;")
+        self.textEdit.setFrameShape(QFrame.Box)
+        self.textEdit.setFrameShadow(QFrame.Raised)
+        self.textEdit.setLineWidth(2)
+        self.textEdit.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.textEdit.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
         self.horizontalLayout_2.addWidget(self.textEdit)
 
@@ -441,6 +475,8 @@ class Ui_PRMPChat(object):
         self.contactButton.setText(QCoreApplication.translate("PRMPChat", u"Contacts", None))
         self.groupButton.setText(QCoreApplication.translate("PRMPChat", u"Groups", None))
         self.channelButton.setText(QCoreApplication.translate("PRMPChat", u"Channels", None))
+        self.loginButton.setText(QCoreApplication.translate("PRMPChat", u"Login", None))
+        self.signupButton.setText(QCoreApplication.translate("PRMPChat", u"Signup", None))
         self.lineEdit.setPlaceholderText(QCoreApplication.translate("PRMPChat", u"Search...", None))
         self.pushButton.setText(QCoreApplication.translate("PRMPChat", u"Search", None))
         self.roomName.setText(QCoreApplication.translate("PRMPChat", u"Chat Name", None))

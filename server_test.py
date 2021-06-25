@@ -1,3 +1,3 @@
-# from prmp_chat.server import Server
-# server = Server()
-# server.start()
+from prmp_chat.backend.server import Server
+server = Server()
+server.start()

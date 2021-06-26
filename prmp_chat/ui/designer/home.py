@@ -3,11 +3,6 @@ import sys
 sys.path.append(r'C:\Users\Administrator\Coding_Projects\Python\Dev_Workspace\PRMP_Chat\prmp_chat\ui')
 from chatList import ChatList, ChatRoomList
 
-
-import sys
-sys.path.append(r'C:\Users\Administrator\Coding_Projects\Python\Dev_Workspace\PRMP_Chat\prmp_chat\ui')
-from chatList import ChatList, ChatRoomList
-
 # -*- coding: utf-8 -*-
 
 ################################################################################

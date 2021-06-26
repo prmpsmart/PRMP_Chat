@@ -3,7 +3,7 @@ import os, time
 d = r'C:\Users\Administrator\Coding_Projects\C_C++\Qt\from_designer'
 
 
-for a in os.listdir(d)[-3:]:
+for a in os.listdir(d):
     f = os.path.join(d, a)
     g, e = os.path.splitext(a)
     if e != '.ui': continue

@@ -49,7 +49,6 @@ chm = selfUser.chats
 # print(len(chm.unseen_chats))
 # print(len(chm.unsent_chats))
 
-USER = selfUser
 
 
 

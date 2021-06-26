@@ -84,24 +84,34 @@ class Ui_NewGroupDialog(object):
         self.lineEdit.setStyleSheet(u"")
         self.lineEdit.setCursorMoveStyle(Qt.VisualMoveStyle)
         self.lineEdit.setClearButtonEnabled(True)
-        self.cancelButton = QPushButton(NewGroupDialog)
+        self.widget = QWidget(NewGroupDialog)
+        self.widget.setObjectName(u"widget")
+        self.widget.setGeometry(QRect(210, 100, 108, 42))
+        self.horizontalLayout = QHBoxLayout(self.widget)
+        self.horizontalLayout.setObjectName(u"horizontalLayout")
+        self.horizontalLayout.setContentsMargins(0, 0, 0, 0)
+        self.cancelButton = QPushButton(self.widget)
         self.cancelButton.setObjectName(u"cancelButton")
-        self.cancelButton.setGeometry(QRect(210, 100, 50, 40))
         sizePolicy.setHeightForWidth(self.cancelButton.sizePolicy().hasHeightForWidth())
         self.cancelButton.setSizePolicy(sizePolicy)
         self.cancelButton.setMinimumSize(QSize(50, 40))
         self.cancelButton.setMaximumSize(QSize(50, 40))
         self.cancelButton.setCursor(QCursor(Qt.PointingHandCursor))
         self.cancelButton.setStyleSheet(u"n")
-        self.pushButton_8 = QPushButton(NewGroupDialog)
+
+        self.horizontalLayout.addWidget(self.cancelButton)
+
+        self.pushButton_8 = QPushButton(self.widget)
         self.pushButton_8.setObjectName(u"pushButton_8")
-        self.pushButton_8.setGeometry(QRect(270, 100, 50, 40))
         sizePolicy.setHeightForWidth(self.pushButton_8.sizePolicy().hasHeightForWidth())
         self.pushButton_8.setSizePolicy(sizePolicy)
         self.pushButton_8.setMinimumSize(QSize(50, 40))
         self.pushButton_8.setMaximumSize(QSize(50, 40))
         self.pushButton_8.setCursor(QCursor(Qt.PointingHandCursor))
         self.pushButton_8.setStyleSheet(u"n")
+
+        self.horizontalLayout.addWidget(self.pushButton_8)
+
 
         self.retranslateUi(NewGroupDialog)
 

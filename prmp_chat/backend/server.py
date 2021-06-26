@@ -1,13 +1,34 @@
 
 from .core import *
 import time
+from prmp_lib.prmp_miscs.prmp_exts import PRMP_File
 
 # for chats in Multi_Users, as the server receives chat directed to this Multi_User object, it sends the chat to all it users
 # This object just holds the users together, it does not save chats.
 
-class Group(Multi_Users): ...
+class Server_Multi_Users(Multi_Users):
+    only_admin = False
 
-class Channel(Multi_Users): only_admin = True
+    def __init__(self, **kwargs):
+        Multi_Users.__init__(self, **kwargs)
+
+    def add_chat(self, chat):
+        if chat.sender in self.admins or self.only_admin is False:
+            dic = dict(**self.admins, **self.chats)
+            del dic[chat.sender]
+
+            for user in dic.values(): user.add_chat(chat)
+    
+    def remove(self, tag):
+        id = tag.id
+        if id != self.creator.id:
+            if id in self.admins: del self.admins[id]
+            if id in self.users: del self.users[id]
+        
+
+class Group(Server_Multi_Users): ...
+
+class Channel(Server_Multi_Users): only_admin = True
 
 class Server_User(User):
     'User on the server side.'
@@ -15,7 +36,56 @@ class Server_User(User):
     def __init__(self, **kwargs):
         User.__init__(self, **kwargs)
         self.queued_chats = []
+    
+    def dispense(self, socket):
+        ...
+    
+    def data(self):
+        users = {}
+        groups = {}
+        channels = {}
 
+        for user in self.users.values(): users[user.id] = dict(name=user.name, icon=user.icon)
+        for group in self.groups.values(): groups[group.id] = dict(name=group.name, icon=group.icon, creator=group.creator.id, admins=list(group.admins.keys()), users=list(group.users.keys()), only_admin=group.only_admin)
+        for channel in self.channels.values(): channels[channel.id] = dict(name=channel.name, icon=channel.icon, creator=channel.creator.id, admins=list(channel.admins.keys()), users=list(channel.users.keys()))
+
+        tag = Tag(users=users, groups=groups, channels=channels)
+
+        return tag
+    
+    def create_group(self, id, name, icon=''):
+        response = Groups.create(id, name, icon=icon, creator=self)
+        if response == RESPONSE.SUCCESSFUL: self.groups[id] = Groups.OBJS[id]
+        return response
+
+    def create_channel(self, id, name, icon=''):
+        response = Channels.create(id, name, icon=icon, creator=self)
+        if response == RESPONSE.SUCCESSFUL: self.channels[id] = Channels.OBJS[id]
+        return response
+    
+    def add_user(self, id):
+        response = Users.exists(id)
+        if response == RESPONSE.EXIST:
+            user = Users.OBJS[id]
+            user.add_user(self)
+            super().add_user(user)
+        return response
+
+    def add_group(self, id):
+        response = Groups.exists(id)
+        if response == RESPONSE.EXIST:
+            group = Groups.OBJS[id]
+            group.add_user(self)
+            super().add_group(group)
+        return response
+
+    def add_channel(self, id):
+        response = Channels.exists(id)
+        if response == RESPONSE.EXIST: 
+            channel = Channels.OBJS[id]
+            channel.add_user(self)
+            super().add_channel(channel)
+        return response
 
 
 # Server Managers
@@ -50,16 +120,41 @@ class Managers(Base_All):
             except: return RESPONSE.FAILED
         else: return response
 
+
 class Users(Managers):
+    OBJS = {}
     OBJ = Server_User
 
 class Groups(Managers):
+    OBJS = {}
     OBJ = Group
 
 class Channels(Managers):
+    OBJS = {}
     OBJ = Channel
 
 MANAGERS = {TYPE.USER: Users, TYPE.GROUP: Groups, TYPE.CHANNEL: Channels}
+
+
+FILE_DIR = os.path.dirname(__file__)
+FILE = os.path.join(FILE_DIR, 'SERVER_DATA.pc')
+
+
+def SAVE():
+    dic = dict(USERS=Users.OBJS, GROUPS=Groups.OBJS, CHANNELS=Channels.OBJS)
+    _file = PRMP_File(FILE, perm='w')
+    _file.saveObj(dic)
+    _file.save()
+
+def LOAD():
+    _file = PRMP_File(FILE)
+    dic = _file.loadObj()
+    if not dic: return
+
+    Users.OBJS.update(dic['USERS'])
+    Groups.OBJS.update(dic['GROUPS'])
+    Channels.OBJS.update(dic['CHANNELS'])
+
 
 
 
@@ -92,7 +187,7 @@ class Session_Parser:
         type, id = tag['type', 'id']
         type = TYPE[type]
 
-        if type is TYPE.ADMIN: ...
+        if type is TYPE.ADMIN: response = RESPONSE.FAILED
         else:
             top_manager = MANAGERS[type]
             response = top_manager.exists(id)
@@ -105,13 +200,13 @@ class Session_Parser:
                 if response is RESPONSE.EXTINCT:
                     manager.add(obj)
                     response = RESPONSE.SUCCESSFUL
-            return response
+        return response
 
     def remove(self, tag):
         type, id = tag['type', 'id']
         type = TYPE[type]
 
-        if type is TYPE.ADMIN: ...
+        if type is TYPE.ADMIN: response = RESPONSE.FAILED
         else:
             manager = self.managers[type]
 
@@ -119,7 +214,7 @@ class Session_Parser:
             if response is RESPONSE.EXIST:
                 manager.remove(id)
                 response = RESPONSE.SUCCESSFUL
-            return response
+        return response
 
     def create(self, tag):
         type, id, name = tag['type', 'id', 'name']
@@ -131,7 +226,7 @@ class Session_Parser:
 
             response = top_manager.create(id, name, creator=self.user)
             if response is RESPONSE.SUCCESSFUL: manager.add(top_manager.OBJS[id])
-            return response
+        return response
 
     def change(self, tag):
         id, change, type, data = tag['id', 'change', 'type', 'data']
@@ -146,7 +241,7 @@ class Session_Parser:
                 obj.change(**{change.lower(): data})
                 response = RESPONSE.SUCCESSFUL
 
-            return response
+        return response
 
     def delete(self, tag):
         type, id = tag['type', 'id']
@@ -158,7 +253,7 @@ class Session_Parser:
             response = top_manager.delete(id)
             if response is RESPONSE.SUCCESSFUL: manager.delete(id)
 
-            return response
+        return response
     
     def chat(self, tag):
         recipient, data, chat, type = tag['recipient', 'data', 'chat', 'type']
@@ -185,6 +280,8 @@ class Session_Parser:
         if action in self.parse_methods:
             func = self.parse_methods[action]
             tag = Tag(response=func(tag))
+        
+        elif action is ACTION.DATA: tag = self.user.data()
 
         elif action is ACTION.STATUS:
             status = {}
@@ -200,7 +297,9 @@ class Session_Parser:
             self.client_handler.stop_session()
             tag = Tag(response=RESPONSE.SUCCESSFUL)
         
-        tag['date'] = DATE_TIME()
+        elif action in [ACTION.LOGIN, ACTION.SIGNUP]: tag = Tag(response=RESPONSE.SIMULTANEOUS_LOGIN)
+        
+        # tag['date_time'] = DATE_TIME()
         
         return tag
 
@@ -219,8 +318,6 @@ class Session:
 
         self.parser = Session_Parser(self)
 
-        self.start_session()
-    
     def start_session(self):
         self.user.change_status(STATUS.ONLINE)
 
@@ -248,7 +345,6 @@ class Session:
         self.LOG(f'{self.client.address} -> {STATUS.OFFLINE} -> {STATUS.LAST_SEEN}={self.user.last_seen}')
 
         self.client._close()
-
         self.response_server.remove(self)
 
 class Response_Server:
@@ -261,7 +357,8 @@ class Response_Server:
         self.users = {}
         self.users_sessions = {}
 
-    def add(self, client, from_signup=False):
+    def add(self, client):
+        self.LOG(client, 'connected!')
 
         while True:
             tag = client.recv_tag()
@@ -272,8 +369,6 @@ class Response_Server:
 
             LOG = lambda val: self.LOG(f'{client} -> {action} -> {val}')
 
-            if not from_signup: self.LOG(client, 'connected!')
-
             if action is ACTION.SIGNUP:
 
                 response = Users.create(*tag['id', 'name'], key=tag.key)
@@ -282,9 +377,7 @@ class Response_Server:
                 soc_resp = client.send_tag(Tag(response=response))
                 if soc_resp in SOCKETS: return
                 
-                if response is RESPONSE.SUCCESSFUL:
-                    user = Users.OBJS[tag.id]
-                    self.add(client, from_signup=1)
+                if response is RESPONSE.SUCCESSFUL: user = Users.OBJS[tag.id]
 
             elif action is ACTION.LOGIN:
                 response = Users.exists(tag.id)
@@ -299,6 +392,7 @@ class Response_Server:
                         client.user = user
 
                     else: response = RESPONSE.FALSE_KEY
+                    print(user.key)
                 
                 LOG(response)
                 soc_resp = client.send_tag(Tag(response=response))
@@ -310,19 +404,21 @@ class Response_Server:
                     self.sessions[str(session)] = session
                     self.users[user.id] = user
                     self.users_sessions[user.id] = session
-                    # self.server.online_clients[str(session)] = session
+
+                    session.start_session()
+                    
                     break
 
     def remove(self, session):
-
         str_sess = str(session)
+        
         if str_sess in self.sessions: del self.sessions[str_sess]
         id = session.user.id
-        session.user.change_status(STATUS.OFFLINE)
+        
         if id in self.users: del self.users[id]
+
         if id in self.users_sessions: del self.users_sessions[id]
 
-        # self.server.remove(session.client)
 
 
 class Server(Base_All, socket.socket):
@@ -345,21 +441,22 @@ class Server(Base_All, socket.socket):
 
         self.LOG = LOG
 
-        self.connections = {}
         self.online_clients = {}
 
         self.max_client = max_client or 10
         self.response_server = Response_Server(self)
 
+        # LOAD()
+
+        # THREAD(self.saveDatas)
+
         self.bind((self.ip, self.port))
         self.listen(self.max_client)
+        
     
     @property
     def sessions(self): return len(self.response_server.sessions)
 
-    @property
-    def connected(self): return len(self.connections)
-    
     def accept(self): return  Client_Socket(socket.socket.accept(self))
 
     def set_online_clients(self):
@@ -377,26 +474,57 @@ class Server(Base_All, socket.socket):
     
     def start(self):
         self.LOG('Accepting connections !')
-        # THREAD(self.set_online_clients)
 
         while True:
             client = self.accept()
-
-            # self.connections[str(client)] = client
-            
-            # self.response_server.add(client)
             THREAD(self.response_server.add, client)
-
-            self.connected_clients()
-
-    # def remove(self, client):
-    #     if str(client) in self.online_clients: del self.online_clients[str(client)]
-    #     self.connected_clients()
     
-    def connected_clients(self): self.LOG(f'TOTAL OF {self.connected} CLIENTS ARE ONLINE')
+    def saveDatas(self):
+        # print('saving', end='\r')
+        SAVE()
+
+        time.sleep(500)
+        self.saveDatas()
 
 
 
+def server_test():
+    nn = 'ade'
+    for a in range(10):
+        n = nn + str(a)
+        Users.create(id=n, name=n, key=n)
+
+    ade0 = Users.OBJS['ade0']
+
+    for a in range(3):
+        n = nn + str(a)
+        m = 'G_'+n
+        Users.OBJS[n].create_group(id=m, name=m)
+
+    for a in range(3):
+        n = nn + str(a)
+        m = 'C_'+n
+        Users.OBJS[n].create_channel(id=m, name=m)
+
+    for a in range(1, 4):
+        n = nn + str(a)
+        c = 'C_'+n
+        g = 'G_'+n
+        ade0.add_user(Users.OBJS[n].id)
+        ade0.add_group(g)
+        ade0.add_channel(c)
+
+    # # LOAD()
+    # # print(Groups.OBJS)
+
+    # # print(ade2.groups)
+    # # print(ade2.channels)
+    # tag = ade0.data()
+    # # print(tag)
+    # en = tag.encode
+    # # print(len(en))
+    # tag = Tag.decode(en)
+    # print(tag)
 
 
 

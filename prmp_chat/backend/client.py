@@ -1,21 +1,47 @@
 
 from .core import *
 
+class Chats_Base:
+    def __init__(self, user, recipient):
+        self.user = user
+        self.recipient = recipient
+        self.last_time = QDateTime.currentDateTime()
+        self.unread_chats = 0
 
-
-class Client_Multi_Users(Multi_Users):
-
-    def __init__(self, **kwargs):
-        Base.__init__(self, **kwargs)
-
-        self.admins = {} 
-        self.users = {}
-        self.chats = {}
-    
     def add_chat(self, tag):
-        if tag.sender in self.admins or self.only_admin is False: self.chats[len(self.chats)] = tag
+        self.last_time = tag.date_time
 
-class Client_Group(Client_Multi_Users): type = 'group'
+        if tag.sender != self.user.id: self.unread_chats += 1
+        else:
+            if self.user.status is not STATUS.ONLINE: tag.sent = False
+        self.chats.append(tag)
+    
+    @property
+    def lastChat(self):
+        if self.chats: return self.chats[-1]
+    
+    def read(self): self.unread_chats = 0
+    
+class Client_Multi_Users(Chats_Base, Multi_Users):
+
+    def __init__(self, user, tag):
+        tag = Tag(**tag)
+        Multi_Users.__init__(self, id=tag.id, name=tag.name, icon=tag.icon)
+        Chats_Base.__init__(self, user, self.id)
+
+        self.creator = tag.creator
+        self.admins = tag.admins
+        self.users = tag.users
+
+    def add_chat(self, tag):
+        if tag.sender in self.admins or self.only_admin is False: self.chats.append(tag)
+        self.last_time = tag.date_time
+    
+
+
+class Client_Group(Client_Multi_Users):
+    type = 'group'
+
 
 class Client_Channel(Client_Multi_Users):
     only_admin = True
@@ -26,15 +52,12 @@ class Client_Channel(Client_Multi_Users):
 
 
 
-class Private_Chat(Base_All):
+class Private_Chat(Chats_Base, Base_All):
     type = 'private'
 
     def __init__(self, user, recipient):
-        self.user = user
-        self.recipient = recipient
+        Chats_Base.__init__(self, user, recipient)
         self.chats = []
-        self.unread_chats = 0
-        self.last_time = QDateTime.currentDateTime()
     
     @property
     def id(self): return self.recipient.id
@@ -45,20 +68,6 @@ class Private_Chat(Base_All):
     @property
     def name(self): return self.recipient.name
 
-    @property
-    def lastChat(self):
-        if self.chats: return self.chats[-1]
-    
-    def add_chat(self, tag):
-        self.last_time = QDateTime.currentDateTime()
-
-        if tag.sender == self.recipient.id: self.unread_chats += 1
-        else:
-            if self.user.status is not STATUS.ONLINE: tag.sent = False
-        self.chats.append(tag)
-    
-    def read(self): self.unread_chats = 0
-    
     def __str__(self): return f'Private_Chat({self.recipient})'
 
 class Chats_Manager(Base_All):
@@ -117,6 +126,23 @@ class Client_User(User):
     def add_user(self, user):
         super().add_user(user)
         self.chats.add_private_chat(user)
+    
+    def load_data(self, tag):
+        users = tag.users
+        groups = tag.groups
+        channels = tag.channels
+
+        for id, tag in users.items():
+            user = Other_User(id=id, name=tag.get('name'), icon=tag.get('icon'))
+            self.add_user(user)
+
+        for id, tag in groups.items():
+            group = Client_Group(self, tag)
+            self.add_group(group)
+
+        for id, tag in channels.items():
+            channel = Client_Channel(self, tag)
+            self.add_channel(channel)
 
 class Socket(socket.socket, Sock):
     def __init__(self, *args, **kwargs):
@@ -141,12 +167,26 @@ class Client(Socket):
     def set_user(self, user): self.user = user
 
     def _connect(self):
-        self.connect((self.ip, self.port))
-        self.connected = True
+        if self.connected: return True
+        try:
+            self.connect((self.ip, self.port))
+            self.connected = True
+            return True
+        except:
+            self.connected = False
+            return False
 
-    def signup(self, id, name, key, force=False):
-        if not self.connected: self._connect()
+    def signup(self, id='', name='', key='', user=None, force=False):
+        if not self._connect(): return
         self.LOG('SIGNING UP')
+
+        self.user = user or self.user
+
+        assert (id and name and key) or self.user, 'Provide [id, name, key] or user'
+
+        id = id or self.user.id
+        name = name or self.user.name
+        key = key or self.user.key
 
         action = ACTION.SIGNUP
         tag = Tag(id=id, name=name, key=key, action=action)
@@ -165,27 +205,47 @@ class Client(Socket):
         self.LOG(f'{action} -> {response}')
 
         if response is RESPONSE.SUCCESSFUL:
-            self.user = Client_User(id=id, name=name, key=key)
+            if not self.user: self.user = Client_User(id=id, name=name, key=key)
+        
+        return response
 
 
-    def login(self, id, key):
-        if not self.connected: self._connect()
+    def login(self, id='', key='', user=None):
+        if not self._connect(): return
         self.LOG('LOGGING IN.')
         
+        self.user = user or self.user
+
+        assert (id and key) or self.user, 'Provide [id, key] or user'
+        
+        id = id or self.user.id
+        key = key or self.user.key
+
         action = ACTION.LOGIN
         tag = Tag(id=id, key=key, action=action)
         
         soc_resp = self.send_tag(tag)
-        print('send')
         if soc_resp in SOCKETS: return soc_resp
         
         response_tag = self.recv_tag()
-        print('recv')
-        if response_tag in SOCKETS: return soc_resp
+        if response_tag in SOCKETS: return response_tag
 
         response = response_tag.response
 
         self.LOG(f'{action} -> {response}')
+
+        if response is RESPONSE.SUCCESSFUL:
+            if not self.user:
+                self.user = Client_User(id=id, key=key)
+                tag = Tag(id=id, key=key, action=ACTION.DATA)
+                
+                soc_resp = self.send_tag(tag)
+                if soc_resp in SOCKETS: return soc_resp
+            
+                response_tag = self.recv_tag()
+                if response_tag in SOCKETS: return response_tag
+
+                self.user.load_data(response_tag)
         
         return response
     

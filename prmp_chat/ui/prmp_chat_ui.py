@@ -3,16 +3,19 @@ from prmp_chat.ui.other_ui import Login
 from PySide6.QtGui import QFontMetrics
 from PySide6.QtWidgets import QFrame, QWidget
 from other_ui import *
+from prmp_chat_test import *
 
+USER = selfUser
+USER = None
 
-
-class Home(Popups, QWidget):
+class Home(Setups):
     UI = Ui_PRMPChat
 
-    def __init__(self, parent=None, app=None):
-        super().__init__(parent, USER)
+    def __init__(self, socket=None, **kwargs):
+        self.socket = socket or Client(user=USER)
+
+        super().__init__(user=self.socket.user, **kwargs)
         
-        self.app = app
         self.currentChatObject = None
         self.currentChatList = 1
         
@@ -40,9 +43,6 @@ class Home(Popups, QWidget):
             self.ui.chatRoomList.add(type='chat', tag=chat, chatObject=self.currentChatObject)
         
         self.currentChatObject.read()
-    
-    def loadUser(self):
-        ...
     
     def setSignals(self):
         self.ui.menuButton.clicked.connect(self.openSideDialog)
@@ -83,23 +83,16 @@ class Home(Popups, QWidget):
 
         self.ui.chatList.clear()
 
-        if w == 1:
-            # contacts
-            pcs = self.user.chats.private_chats
-            vals = list(pcs.values())
+        if w == 1: pcs = self.user.chats.private_chats
+        elif w == 2: pcs = self.user.groups
+        elif w == 3: pcs = self.user.channels
+        
+        def key(a): return a.last_time
+        vals = list(pcs.values())
 
-            def key(a): return a.last_time
+        sorted_pcs = sorted(vals, key=key, reverse=1)
 
-            sorted_pcs = sorted(vals, key=key, reverse=1)
-
-            for pc in sorted_pcs: self.ui.chatList.add(pc)
-
-        elif w == 2:
-            # groups
-            ...
-        elif w == 3:
-            # channels
-            ...
+        for pc in sorted_pcs: self.ui.chatList.add(pc)
         
     def sendMessage(self):
         if not self.currentChatObject: return
@@ -143,29 +136,19 @@ class Home(Popups, QWidget):
         sideDialog.move(pos.x(), pos.y()+28)
         sideDialog.show()
 
-        
-
 
 class Start(Setups):
     UI = Ui_Start
     def __init__(self, app):
-        self.app = app
-        super().__init__(None, flag=Qt.FramelessWindowHint)
+        super().__init__(None, flag=Qt.FramelessWindowHint, app=app)
 
-        size = self.size()
-        a, b = size.width(), size.height()
-        rect = app.screens()[0].availableGeometry()
-        geo = QRect(int(rect.width()/2-a/2), int(rect.height()/2-b/2), 400, 300)
-        self.setGeometry(geo)
-        
-        USER = None
+        self.centerWindow()
+        self.setMaximumWidth(self.size().width())
         self.socket = Client()
 
-        self.socket.signup('p', 'PRMP', 'p')
-
         if not USER:
-            self.signup = Signup(self, self.socket)
-            self.login = Login(self, self.socket)
+            self.signup = Signup(parent=self, socket=self.socket)
+            self.login = Login(parent=self, socket=self.socket)
             self.ui.horizontalLayout.addWidget(self.login)
             self.ui.horizontalLayout.addWidget(self.signup)
 
@@ -174,7 +157,13 @@ class Start(Setups):
             self.ui.checkBox.stateChanged.connect(self.changeAction)
             self.show()
         
-        else: exit()
+        else: self.launch()
+    
+    def signupResponse(self):
+        self.user = self.socket.user
+        
+        self.login.ui.usernameLineEdit.setText(self.user.id)
+        self.login.ui.passwordLineEdit.setText(self.user.key)
     
     def changeAction(self, event=0):
         if event == Qt.Checked:
@@ -183,13 +172,20 @@ class Start(Setups):
         else:
             self.signup.close()
             self.login.show()
+
     
     def loginResponse(self, response):
         if response == RESPONSE.SUCCESSFUL:
-            app = self.app
-            self.app = None
             self.close()
-            Home(app).show()
+            self.launch(1)
+    
+    def launch(self, new=0):
+        d = {}
+        if new: d.update(socket=self.socket)
+        Home(app=self.app, **d).show()
+    
+    
+    def closeEvent(self, event=0): ...
 
 
 

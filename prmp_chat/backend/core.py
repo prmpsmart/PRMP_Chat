@@ -1,4 +1,4 @@
-import enum, json, threading, socket
+import enum, json, threading, socket, os
 from PySide6.QtCore import QDateTime
 
 class Base_All:
@@ -43,6 +43,8 @@ class ACTION(BASE_ENUM):
     CREATE = 'CREATE'
     DELETE = 'DELETE'
     CHANGE = 'CHANGE'
+    
+    DATA = 'DATA'
 
     CHAT = 'CHAT'
     START = 'START'
@@ -247,7 +249,7 @@ class Base(Base_All):
         self.id = id
         self.icon = icon
         self.name = name
-        self.date_time = date_time
+        self.date_time = date_time or QDateTime.currentDateTime()
     
     def __str__(self):
         add = ''
@@ -257,11 +259,21 @@ class Base(Base_All):
 class Multi_Users(Base):
     only_admin = False
 
-    def __init__(self, creator, **kwargs):
+    def __init__(self, creator=None, **kwargs):
         Base.__init__(self, **kwargs)
         self.creator = creator
-        self.admins = {}
+        self.admins = {creator.id: creator} if creator else {}
         self.users = {}
+        self.chats = []
+        self.last_time = ''
+    
+    def add_user(self, user):
+        if user.id not in self.users: self.users[user.id] = user
+
+    def add_admin(self, admin):
+        if admin.id not in self.admins: self.admins[admin.id] = admin
+    
+    def add_chat(self, chat): self.chats.append(chat)
 
 class User(Base):
 

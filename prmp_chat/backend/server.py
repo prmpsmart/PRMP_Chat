@@ -6,6 +6,12 @@ from prmp_lib.prmp_miscs.prmp_exts import PRMP_File
 # for chats in Multi_Users, as the server receives chat directed to this Multi_User object, it sends the chat to all it users
 # This object just holds the users together, it does not save chats.
 
+
+SESSIONS = {}
+USERS = {}
+USERS_SESSIONS = {}
+
+
 class Server_Multi_Users(Multi_Users):
     only_admin = False
 
@@ -13,7 +19,7 @@ class Server_Multi_Users(Multi_Users):
         Multi_Users.__init__(self, **kwargs)
 
     def add_chat(self, chat):
-        if chat.sender in self.admins or self.only_admin is False:
+        if chat.sender in self.admins or self.only_admin == False:
             dic = dict(**self.admins, **self.chats)
             del dic[chat.sender]
 
@@ -23,7 +29,7 @@ class Server_Multi_Users(Multi_Users):
         id = tag.id
         if id != self.creator.id:
             if id in self.admins: del self.admins[id]
-            if id in self.users: del self.users[id]
+            if id in USERS: del USERS[id]
         
 
 class Group(Server_Multi_Users): ...
@@ -45,7 +51,7 @@ class Server_User(User):
         groups = {}
         channels = {}
 
-        for user in self.users.values(): users[user.id] = dict(name=user.name, icon=user.icon)
+        for user in USERS.values(): users[user.id] = dict(name=user.name, icon=user.icon)
         for group in self.groups.values(): groups[group.id] = dict(name=group.name, icon=group.icon, creator=group.creator.id, admins=list(group.admins.keys()), users=list(group.users.keys()), only_admin=group.only_admin)
         for channel in self.channels.values(): channels[channel.id] = dict(name=channel.name, icon=channel.icon, creator=channel.creator.id, admins=list(channel.admins.keys()), users=list(channel.users.keys()))
 
@@ -86,6 +92,10 @@ class Server_User(User):
             channel.add_user(self)
             super().add_channel(channel)
         return response
+    
+    def add_chat(self, tag):
+        if self.status == STATUS.ONLINE: ...
+        else: self.queued_chats.append(tag)
 
 
 # Server Managers
@@ -102,7 +112,7 @@ class Managers(Base_All):
     @classmethod
     def create(cls, id, name, **kwargs):
         response = cls.exists(id)
-        if response is RESPONSE.EXTINCT:
+        if response == RESPONSE.EXTINCT:
             try:
                 obj = cls.OBJ(id=id, name=name, **kwargs)
                 cls.OBJS[id] = obj
@@ -113,7 +123,7 @@ class Managers(Base_All):
     @classmethod
     def delete(cls, id):
         response = cls.exists(id)
-        if response is RESPONSE.EXIST:
+        if response == RESPONSE.EXIST:
             try:
                 del cls.OBJS[id]
                 return RESPONSE.SUCCESSFUL
@@ -187,17 +197,17 @@ class Session_Parser:
         type, id = tag['type', 'id']
         type = TYPE[type]
 
-        if type is TYPE.ADMIN: response = RESPONSE.FAILED
+        if type == TYPE.ADMIN: response = RESPONSE.FAILED
         else:
             top_manager = MANAGERS[type]
             response = top_manager.exists(id)
 
-            if response is RESPONSE.EXIST:
+            if response == RESPONSE.EXIST:
                 obj = top_manager.OBJS[id]
                 manager = self.managers[type]
 
                 response = EXISTS(manager, id)
-                if response is RESPONSE.EXTINCT:
+                if response == RESPONSE.EXTINCT:
                     manager.add(obj)
                     response = RESPONSE.SUCCESSFUL
         return response
@@ -206,12 +216,12 @@ class Session_Parser:
         type, id = tag['type', 'id']
         type = TYPE[type]
 
-        if type is TYPE.ADMIN: response = RESPONSE.FAILED
+        if type == TYPE.ADMIN: response = RESPONSE.FAILED
         else:
             manager = self.managers[type]
 
             response = EXISTS(manager, id)
-            if response is RESPONSE.EXIST:
+            if response == RESPONSE.EXIST:
                 manager.remove(id)
                 response = RESPONSE.SUCCESSFUL
         return response
@@ -225,7 +235,7 @@ class Session_Parser:
             manager = self.managers[type]
 
             response = top_manager.create(id, name, creator=self.user)
-            if response is RESPONSE.SUCCESSFUL: manager.add(top_manager.OBJS[id])
+            if response == RESPONSE.SUCCESSFUL: manager.add(top_manager.OBJS[id])
         return response
 
     def change(self, tag):
@@ -236,7 +246,7 @@ class Session_Parser:
             top_manager = MANAGERS[type]
             response = EXISTS(top_manager, id)
 
-            if response is RESPONSE.EXIST:
+            if response == RESPONSE.EXIST:
                 obj = top_manager.OBJS[id]
                 obj.change(**{change.lower(): data})
                 response = RESPONSE.SUCCESSFUL
@@ -251,20 +261,25 @@ class Session_Parser:
             manager = self.managers[type]
 
             response = top_manager.delete(id)
-            if response is RESPONSE.SUCCESSFUL: manager.delete(id)
+            if response == RESPONSE.SUCCESSFUL: manager.delete(id)
 
         return response
     
     def chat(self, tag):
         recipient, data, chat, type = tag['recipient', 'data', 'chat', 'type']
+        # type = [user, group, channel]
+        # chat = [text, audio, video]
+
         top_manager = MANAGERS[type]
         response = top_manager.exists(recipient)
 
-        if response is RESPONSE.EXIST:
-            obj = top_manager[recipient]
+        if response == RESPONSE.EXIST:
+            obj = top_manager.OBJS[recipient]
             tag['sender'] = self.user.id
 
-            obj.chat(tag)
+            if chat == CHAT.TEXT: obj.add_chat(tag)
+
+            
             response = RESPONSE.SUCCESSFUL
         return response
 
@@ -281,19 +296,19 @@ class Session_Parser:
             func = self.parse_methods[action]
             tag = Tag(response=func(tag))
         
-        elif action is ACTION.DATA: tag = self.user.data()
+        elif action == ACTION.DATA: tag = self.user.data()
 
-        elif action is ACTION.STATUS:
+        elif action == ACTION.STATUS:
             status = {}
             for user in self.user.users_manager:
-                if user.status is STATUS.ONLINE: stat = STATUS.ONLINE
+                if user.status == STATUS.ONLINE: stat = STATUS.ONLINE
                 else: stat = DATE_TIME(user.last_seen)
 
                 status[user.id] = stat
 
             tag = Tag(action=ACTION.STATUS, status=status)
 
-        elif action is ACTION.LOGOUT:
+        elif action == ACTION.LOGOUT:
             self.client_handler.stop_session()
             tag = Tag(response=RESPONSE.SUCCESSFUL)
         
@@ -327,7 +342,7 @@ class Session:
             tag = self.client.recv_tag()
 
             if tag in SOCKETS:
-                # means that client is offline
+                # means that client == offline
                 self.stop_session()
                 break
 
@@ -335,7 +350,7 @@ class Session:
             soc_resp = self.client.send_tag(tag)
             
             if soc_resp in SOCKETS:
-                # means that client is offline
+                # means that client == offline
                 self.stop_session()
                 break
 
@@ -353,10 +368,6 @@ class Response_Server:
         self.server = server
         self.LOG = server.LOG
 
-        self.sessions = {}
-        self.users = {}
-        self.users_sessions = {}
-
     def add(self, client):
         self.LOG(client, 'connected!')
 
@@ -369,7 +380,7 @@ class Response_Server:
 
             LOG = lambda val: self.LOG(f'{client} -> {action} -> {val}')
 
-            if action is ACTION.SIGNUP:
+            if action == ACTION.SIGNUP:
 
                 response = Users.create(*tag['id', 'name'], key=tag.key)
                 
@@ -377,15 +388,15 @@ class Response_Server:
                 soc_resp = client.send_tag(Tag(response=response))
                 if soc_resp in SOCKETS: return
                 
-                if response is RESPONSE.SUCCESSFUL: user = Users.OBJS[tag.id]
+                if response == RESPONSE.SUCCESSFUL: user = Users.OBJS[tag.id]
 
-            elif action is ACTION.LOGIN:
+            elif action == ACTION.LOGIN:
                 response = Users.exists(tag.id)
 
-                if response is RESPONSE.EXIST:
+                if response == RESPONSE.EXIST:
                     user = Users.OBJS[tag.id]
 
-                    if user.id in self.users or user.status is STATUS.ONLINE: response = RESPONSE.SIMULTANEOUS_LOGIN
+                    if user.id in USERS or user.status == STATUS.ONLINE: response = RESPONSE.SIMULTANEOUS_LOGIN
 
                     elif user.key == tag.key:
                         response = RESPONSE.SUCCESSFUL
@@ -398,12 +409,12 @@ class Response_Server:
                 soc_resp = client.send_tag(Tag(response=response))
                 if soc_resp in SOCKETS: return soc_resp
 
-                if response is RESPONSE.SUCCESSFUL:
+                if response == RESPONSE.SUCCESSFUL:
                     session = Session(self, client)
 
-                    self.sessions[str(session)] = session
-                    self.users[user.id] = user
-                    self.users_sessions[user.id] = session
+                    SESSIONS[str(session)] = session
+                    USERS[user.id] = user
+                    USERS_SESSIONS[user.id] = session
 
                     session.start_session()
                     
@@ -412,12 +423,12 @@ class Response_Server:
     def remove(self, session):
         str_sess = str(session)
         
-        if str_sess in self.sessions: del self.sessions[str_sess]
+        if str_sess in SESSIONS: del SESSIONS[str_sess]
         id = session.user.id
         
-        if id in self.users: del self.users[id]
+        if id in USERS: del USERS[id]
 
-        if id in self.users_sessions: del self.users_sessions[id]
+        if id in USERS_SESSIONS: del USERS_SESSIONS[id]
 
 
 
@@ -506,7 +517,7 @@ def server_test():
         m = 'C_'+n
         Users.OBJS[n].create_channel(id=m, name=m)
 
-    for a in range(1, 4):
+    for a in range(1, 3):
         n = nn + str(a)
         c = 'C_'+n
         g = 'G_'+n
@@ -519,11 +530,11 @@ def server_test():
 
     # # print(ade2.groups)
     # # print(ade2.channels)
-    # tag = ade0.data()
-    # # print(tag)
-    # en = tag.encode
-    # # print(len(en))
-    # tag = Tag.decode(en)
+    tag = ade0.data()
+    # print(tag)
+    en = tag.encode
+    # print(len(en))
+    tag = Tag.decode(en)
     # print(tag)
 
 

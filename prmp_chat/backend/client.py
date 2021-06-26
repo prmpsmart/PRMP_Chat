@@ -13,7 +13,7 @@ class Chats_Base:
 
         if tag.sender != self.user.id: self.unread_chats += 1
         else:
-            if self.user.status is not STATUS.ONLINE: tag.sent = False
+            if self.user.status != STATUS.ONLINE: tag.sent = False
         self.chats.append(tag)
     
     @property
@@ -24,9 +24,9 @@ class Chats_Base:
     
 class Client_Multi_Users(Chats_Base, Multi_Users):
 
-    def __init__(self, user, tag):
+    def __init__(self, user, id, tag):
         tag = Tag(**tag)
-        Multi_Users.__init__(self, id=tag.id, name=tag.name, icon=tag.icon)
+        Multi_Users.__init__(self, id=id, name=tag.name, icon=tag.icon)
         Chats_Base.__init__(self, user, self.id)
 
         self.creator = tag.creator
@@ -34,7 +34,7 @@ class Client_Multi_Users(Chats_Base, Multi_Users):
         self.users = tag.users
 
     def add_chat(self, tag):
-        if tag.sender in self.admins or self.only_admin is False: self.chats.append(tag)
+        if tag.sender in self.admins or self.only_admin == False: self.chats.append(tag)
         self.last_time = tag.date_time
     
 
@@ -137,11 +137,11 @@ class Client_User(User):
             self.add_user(user)
 
         for id, tag in groups.items():
-            group = Client_Group(self, tag)
+            group = Client_Group(self, id, tag)
             self.add_group(group)
 
         for id, tag in channels.items():
-            channel = Client_Channel(self, tag)
+            channel = Client_Channel(self, id, tag)
             self.add_channel(channel)
 
 class Socket(socket.socket, Sock):
@@ -204,7 +204,7 @@ class Client(Socket):
 
         self.LOG(f'{action} -> {response}')
 
-        if response is RESPONSE.SUCCESSFUL:
+        if response == RESPONSE.SUCCESSFUL:
             if not self.user: self.user = Client_User(id=id, name=name, key=key)
         
         return response
@@ -234,7 +234,7 @@ class Client(Socket):
 
         self.LOG(f'{action} -> {response}')
 
-        if response is RESPONSE.SUCCESSFUL:
+        if response == RESPONSE.SUCCESSFUL:
             if not self.user:
                 self.user = Client_User(id=id, key=key)
                 tag = Tag(id=id, key=key, action=ACTION.DATA)
@@ -266,23 +266,24 @@ class Client(Socket):
                 self.parse(tag)
     
     def parse(self, tag):
-        if tag.action is ACTION.STATUS: self.recv_status(tag)
-
-        elif tag.action is ACTION.CHAT: self.recv_chat(tag)
+        if tag.action == ACTION.STATUS: self.recv_status(tag)
+        elif tag.action == ACTION.CHAT: self.recv_chat(tag)
     
-    def send_chat(self, recipient, data, chat, type):
-        tag = Tag(recipient=recipient, data=data, chat=chat, type=type)
+    def send_chat(self, recipient, data, chat=CHAT.TEXT, type=TYPE.USER):
+        tag = Tag(recipient=recipient, data=data, chat=chat, type=type, sender=self.user.id, action=ACTION.CHAT)
         return self.send_tag(tag)
 
     def send_status(self, tag): return self.send_tag(Tag(action=ACTION.STATUS))
 
-    def recv_chat(self, tag): self.user.chats_manager.add(tag)
+    def recv_chat(self, tag):
+        self.user.add_chat(tag)
+        print(tag)
 
     def recv_status(self, tag):
         statuses = tag.status
         for id, status in statuses:
-            user = self.user.users_manager[id]
-            if status is STATUS.ONLINE: user.status = status
+            user = self.user.users[id]
+            if status == STATUS.ONLINE: user.status = status
             else:
                 user.status = STATUS.OFFLINE
                 user.last_seen = DATE_TIME(status)

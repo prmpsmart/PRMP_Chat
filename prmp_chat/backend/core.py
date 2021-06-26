@@ -5,14 +5,23 @@ class Base_All:
     def __repr__(self): return f'<{self}>'
 
 
+
 # Enums 
 
-class BASE_ENUM(Base_All, enum.Enum):
+class BASE_ENUM(enum.Enum):
+
+    def __str__(self): return self.name
 
     def __eq__(self, other):
         if isinstance(other, str): return self.name == other.upper()
         else: return self is other
+
+    def __neq__(self, other):
+        if isinstance(other, str): return self.name != other.upper()
+        else: return self is not other
     
+    def __repr__(self): return f'<{self}>'
+
     def __hash__(self): return hash(self.name)
 
 class TAG(BASE_ENUM):
@@ -95,7 +104,6 @@ class TYPE(BASE_ENUM):
     USER = 'USER'
     GROUP = 'GROUP'
     CHANNEL = 'CHANNEL'
-    # CHAT = 'CHAT'
 
 class SOCKET(BASE_ENUM):
     'Enums of Socket responses'
@@ -113,6 +121,12 @@ class Tag(Base_All, dict):
         if 'response' in kwargs:
             response = kwargs['response']
             kwargs['response'] = RESPONSE[response]
+        if 'chat' in kwargs:
+            chat = kwargs['chat']
+            kwargs['chat'] = CHAT[chat]
+        if 'type' in kwargs:
+            type = kwargs['type']
+            kwargs['type'] = TYPE[type]
         if 'alive' in kwargs:
             alive = kwargs['alive']
             kwargs['alive'] = SOCKET[alive]
@@ -206,7 +220,7 @@ class Sock(Base_All):
             
             tag = Tag.decode(encoded)
 
-            if tag.alive is SOCKET.ALIVE:
+            if tag.alive == SOCKET.ALIVE:
                 print('SERVER CHECK', tag, end='\r')
                 return func(buffer)
             return tag
@@ -290,7 +304,7 @@ class User(Base):
     
     def change_status(self, status):
         self.status = status
-        if status is STATUS.OFFLINE: self.last_seen = DATE_TIME()
+        if status == STATUS.OFFLINE: self.last_seen = DATE_TIME()
     
     def add_user(self, user):
         if user.id not in self.users: self.users[user.id] = user
@@ -298,6 +312,4 @@ class User(Base):
         if group.id not in self.groups: self.groups[group.id] = group
     def add_channel(self, channel):
         if channel.id not in self.channels: self.channels[channel.id] = channel
-
-
 

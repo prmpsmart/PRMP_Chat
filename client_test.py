@@ -9,6 +9,6 @@ dic = dict(id=f'ade1', name='ade1', key='ade1')
 user = Client_User(**dic)
 client = Client(user=user)
 
-client.signup(**dic)
-client.login(user.id, user.key)
+# client.signup()
+client.login()
 client.start_session()

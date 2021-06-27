@@ -50,8 +50,6 @@ class Client_Channel(Client_Multi_Users):
 
 # User
 
-
-
 class Private_Chat(Chats_Base, Base_All):
     type = 'private'
 
@@ -70,6 +68,7 @@ class Private_Chat(Chats_Base, Base_All):
 
     def __str__(self): return f'Private_Chat({self.recipient})'
 
+
 class Chats_Manager(Base_All):
 
     def __init__(self, user):
@@ -85,6 +84,7 @@ class Chats_Manager(Base_All):
     
     def add_chat(self, tag):
         recipient = tag.recipient
+        print(tag.type)
         
         id = tag.sender if recipient == self.user.id else tag.recipient
 
@@ -191,12 +191,12 @@ class Client(Socket):
         action = ACTION.SIGNUP
         tag = Tag(id=id, name=name, key=key, action=action)
         soc_resp = self.send_tag(tag)
-        if soc_resp in SOCKETS:
+        if soc_resp in SOCKET:
             self.LOG(soc_resp)
             return soc_resp
 
         response_tag = self.recv_tag()
-        if response_tag in SOCKETS:
+        if response_tag in SOCKET:
             self.LOG(response_tag)
             return response_tag
 
@@ -225,10 +225,10 @@ class Client(Socket):
         tag = Tag(id=id, key=key, action=action)
         
         soc_resp = self.send_tag(tag)
-        if soc_resp in SOCKETS: return soc_resp
+        if soc_resp in SOCKET: return soc_resp
         
         response_tag = self.recv_tag()
-        if response_tag in SOCKETS: return response_tag
+        if response_tag in SOCKET: return response_tag
 
         response = response_tag.response
 
@@ -240,10 +240,10 @@ class Client(Socket):
                 tag = Tag(id=id, key=key, action=ACTION.DATA)
                 
                 soc_resp = self.send_tag(tag)
-                if soc_resp in SOCKETS: return soc_resp
+                if soc_resp in SOCKET: return soc_resp
             
                 response_tag = self.recv_tag()
-                if response_tag in SOCKETS: return response_tag
+                if response_tag in SOCKET: return response_tag
 
                 self.user.load_data(response_tag)
         
@@ -257,7 +257,7 @@ class Client(Socket):
     def start_session(self):
         while True:
             tag = self.recv_tag()
-            if tag in SOCKETS: return
+            if tag in SOCKET: return
 
             if len(tag) == 1 and 'response' in tag:
                 # it's a response to a post
@@ -275,9 +275,7 @@ class Client(Socket):
 
     def send_status(self, tag): return self.send_tag(Tag(action=ACTION.STATUS))
 
-    def recv_chat(self, tag):
-        self.user.add_chat(tag)
-        print(tag)
+    def recv_chat(self, tag): self.user.add_chat(tag)
 
     def recv_status(self, tag):
         statuses = tag.status
@@ -286,7 +284,7 @@ class Client(Socket):
             if status == STATUS.ONLINE: user.status = status
             else:
                 user.status = STATUS.OFFLINE
-                user.last_seen = DATE_TIME(status)
+                user.last_seen = DATETIME(status)
 
 
 

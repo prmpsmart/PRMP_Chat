@@ -1,4 +1,4 @@
-import enum, json, threading, socket, os
+import json, threading, socket, os
 from PySide6.QtCore import QDateTime
 
 class Base_All:
@@ -6,133 +6,105 @@ class Base_All:
 
 
 
-# Enums 
+# constants
 
-class BASE_ENUM(enum.Enum):
+class CONSTANT:
 
+    def __init__(self, name, children=[]):
+        self.NAME = name.upper()
+        self.CHILDREN = {child.name: child for child in children}
+    
+    def __len__(self): return len(self.children)
+
+    @property
+    def list(self): return list(self.children.values())
+    
     def __str__(self): return self.name
-
-    def __eq__(self, other):
-        if isinstance(other, str): return self.name == other.upper()
-        else: return self is other
-
-    def __neq__(self, other):
-        if isinstance(other, str): return self.name != other.upper()
-        else: return self is not other
-    
-    def __repr__(self): return f'<{self}>'
-
     def __hash__(self): return hash(self.name)
+    def __getitem__(self, name):
+        if isinstance(name, str):
+            name = name.upper()
+            f = self.__dict__.get(name)
+            if f is None: f = self.__dict__['CHILDREN'][name]
+            return f
+        elif isinstance(name, (int, slice)): return self.list[name]
+        else: return self.__dict__['CHILDREN'][name]
+    __getattr__ = __getitem__
+    def __eq__(self, other): return str(other).upper() == self.name
 
-class TAG(BASE_ENUM):
-    'Enum of Tags.'
 
-    ACTION = 'ACTION'
-    CHAT_COLOR = 'CHAT_COLOR'
-    CHAT = 'CHAT'
-    RESPONSE = 'RESPONSE'
-    SENDER = 'SENDER'
-    RECIPIENT = 'RECIPIENT'
-    SENDER_TYPE = 'SENDER_TYPE'
-    # RECIPIENT_TYPE = 'RECIPIENT_TYPE'
-    ID = 'ID'
-    KEY = 'KEY'
-    NAME = 'NAME'
-    DATA = 'DATA'
-    STATUS = 'STATUS'
-    DATE_TIME = 'DATE_TIME'
-    LAST_SEEN = 'LAST_SEEN'
-    RESPONSE_TO = 'RESPONSE_TO'
 
-class ACTION(BASE_ENUM):
-    'Enum of Actions.'
 
-    ADD = 'ADD'
-    REMOVE = 'REMOVE'
-    CREATE = 'CREATE'
-    DELETE = 'DELETE'
-    CHANGE = 'CHANGE'
-    
-    DATA = 'DATA'
+CHAT_COLOR = CONSTANT('CHAT_COLOR')
+SENDER = CONSTANT('SENDER')
+RECIPIENT = CONSTANT('RECIPIENT')
+SENDER_TYPE = CONSTANT('SENDER_TYPE')
+KEY = CONSTANT('KEY')
+NAME = CONSTANT('NAME')
+DATE_TIME = CONSTANT('DATE_TIME')
+RESPONSE_TO = CONSTANT('RESPONSE_TO')
+ADD = CONSTANT('ADD')
+REMOVE = CONSTANT('REMOVE')
+CREATE = CONSTANT('CREATE')
+DELETE = CONSTANT('DELETE')
+CHANGE = CONSTANT('CHANGE')
+DATA = CONSTANT('DATA')
+START = CONSTANT('START')
+END = CONSTANT('END')
+SIGNUP = CONSTANT('SIGNUP')
+LOGIN = CONSTANT('LOGIN')
+LOGOUT = CONSTANT('LOGOUT')
+TEXT = CONSTANT('TEXT')
+AUDIO = CONSTANT('AUDIO')
+VIDEO = CONSTANT('VIDEO')
 
-    CHAT = 'CHAT'
-    START = 'START'
-    END = 'END'
-    STATUS = 'STATUS'
+ONLINE = CONSTANT('ONLINE')
+OFFLINE = CONSTANT('OFFLINE')
+LAST_SEEN = CONSTANT('LAST_SEEN')
 
-    SIGNUP = 'SIGNUP'
-    LOGIN = 'LOGIN'
-    LOGOUT = 'LOGOUT'
 
-class CHAT(BASE_ENUM):
-    'Enum of Chats.'
+SUCCESSFUL = CONSTANT('SUCCESSFUL')
+FAILED = CONSTANT('FAILED')
+LOGIN_FAILED = CONSTANT('LOGIN_FAILED')
+SIMULTANEOUS_LOGIN = CONSTANT('SIMULTANEOUS_LOGIN')
+EXIST = CONSTANT('EXIST')
+EXTINCT = CONSTANT('EXTINCT')
+FALSE_KEY = CONSTANT('FALSE_KEY')
 
-    TEXT = 'TEXT'
-    AUDIO = 'AUDIO'
-    VIDEO = 'VIDEO'
 
-class STATUS(BASE_ENUM):
-    'Enum of Status.'
+USER_ID = CONSTANT('USER_ID')
+GROUP_ID = CONSTANT('GROUP_ID')
+CHANNEL_ID = CONSTANT('CHANNEL_ID')
+CHAT_ID = CONSTANT('CHAT_ID')
 
-    ONLINE = 'ONLINE'
-    OFFLINE = 'OFFLINE'
-    LAST_SEEN = 'LAST_SEEN'
 
-class RESPONSE(BASE_ENUM):
-    'Enum of Responses.'
+ADMIN = CONSTANT('ADMIN')
+USER = CONSTANT('USER')
+GROUP = CONSTANT('GROUP')
+CHANNEL = CONSTANT('CHANNEL')
 
-    SUCCESSFUL = 'SUCCESSFUL'
-    FAILED = 'FAILED'
-    LOGIN_FAILED = 'LOGIN_FAILED'
-    SIMULTANEOUS_LOGIN = 'SIMULTANEOUS_LOGIN'
-    EXIST = 'EXIST'
-    EXTINCT = 'EXTINCT'
-    FALSE_KEY = 'FALSE_KEY'
 
-class ID(BASE_ENUM):
-    'Enum of IDs.'
+RESET = CONSTANT('RESET')
+CLOSED = CONSTANT('CLOSED')
+ALIVE = CONSTANT('ALIVE')
 
-    USER_ID = 'USER_ID'
-    GROUP_ID = 'GROUP_ID'
-    CHANNEL_ID = 'CHANNEL_ID'
-    CHAT_ID = 'CHAT_ID'
 
-class TYPE(BASE_ENUM):
-    'Enum of Types.'
+CHAT = CONSTANT('CHAT', [TEXT, AUDIO, VIDEO])
+STATUS = CONSTANT('STATUS', [ONLINE, OFFLINE, LAST_SEEN])
+SOCKET = CONSTANT('SOCKET', [RESET, CLOSED, ALIVE])
+RESPONSE = CONSTANT('RESPONSE', [SUCCESSFUL, FAILED, LOGIN_FAILED, SIMULTANEOUS_LOGIN, EXIST, EXTINCT, FALSE_KEY])
+ID = CONSTANT('ID', [USER_ID, GROUP_ID, CHANNEL_ID, CHAT_ID])
+TYPE = CONSTANT('TYPE', [ADMIN, USER, GROUP, CHANNEL])
+ACTION = CONSTANT('ACTION', [ADD, REMOVE, CREATE, DELETE, CHANGE, DATA, CHAT, START, END, STATUS, SIGNUP, LOGIN, LOGOUT])
+TAG = CONSTANT('TAG', [ACTION, CHAT_COLOR, CHAT, RESPONSE, SENDER, RECIPIENT, SENDER_TYPE, ID, KEY, NAME, DATA, STATUS, DATE_TIME, LAST_SEEN, RESPONSE_TO])
 
-    ADMIN = 'ADMIN'
-    USER = 'USER'
-    GROUP = 'GROUP'
-    CHANNEL = 'CHANNEL'
-
-class SOCKET(BASE_ENUM):
-    'Enums of Socket responses'
-
-    RESET = 'RESET'
-    CLOSED = 'CLOSED'
-    ALIVE = 'ALIVE'
 
 class Tag(Base_All, dict):
 
     def __init__(self, **kwargs):
-        if 'action' in kwargs:
-            action = kwargs['action']
-            kwargs['action'] = ACTION[action]
-        if 'response' in kwargs:
-            response = kwargs['response']
-            kwargs['response'] = RESPONSE[response]
-        if 'chat' in kwargs:
-            chat = kwargs['chat']
-            kwargs['chat'] = CHAT[chat]
-        if 'type' in kwargs:
-            type = kwargs['type']
-            kwargs['type'] = TYPE[type]
-        if 'alive' in kwargs:
-            alive = kwargs['alive']
-            kwargs['alive'] = SOCKET[alive]
-        if 'date_time' in kwargs:
-            date_time = kwargs['date_time']
-            if isinstance(date_time, int): kwargs['date_time'] = DATE_TIME(date_time)
+        if 'DATE_TIME' in kwargs:
+            date_time = kwargs['DATE_TIME']
+            if isinstance(date_time, int): kwargs['DATE_TIME'] = DATETIME(date_time)
 
         dict.__init__(self, **kwargs)
 
@@ -148,8 +120,8 @@ class Tag(Base_All, dict):
         _dict = {}
 
         for k, v in self.items():
-            if k == 'date_time': v = DATE_TIME(v)
-            elif isinstance(v, BASE_ENUM): v = v.value
+            if k == DATE_TIME: v = DATETIME(v)
+            elif isinstance(v, CONSTANT): v = v.name
             _dict[k] = v
 
         string = json.dumps(_dict)
@@ -188,7 +160,6 @@ class Tag(Base_All, dict):
 
 # socket's send and recv
 
-SOCKETS = (SOCKET.RESET, SOCKET.CLOSED)
 
 class Sock(Base_All):
 
@@ -238,7 +209,7 @@ def EXISTS(manager, obj): return RESPONSE.EXIST if obj in manager else RESPONSE.
 
 def THREAD(func, *args, **kwargs): threading.Thread(target=func, args=args, kwargs=kwargs).start()
 
-def DATE_TIME(date_time=None, _int=1):
+def DATETIME(date_time=None, _int=1):
     if date_time is None:
         date_time = QDateTime.currentDateTime()
         if _int: return DATE_TIME(date_time)

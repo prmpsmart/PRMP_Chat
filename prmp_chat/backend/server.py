@@ -30,7 +30,6 @@ class Server_Multi_Users(Multi_Users):
         if id != self.creator.id:
             if id in self.admins: del self.admins[id]
             if id in USERS: del USERS[id]
-        
 
 class Group(Server_Multi_Users): ...
 
@@ -43,8 +42,7 @@ class Server_User(User):
         User.__init__(self, **kwargs)
         self.queued_chats = []
     
-    def dispense(self, socket):
-        ...
+    def dispense(self): self.queued_chats = []
     
     def data(self):
         users = {}
@@ -94,7 +92,9 @@ class Server_User(User):
         return response
     
     def add_chat(self, tag):
-        if self.status == STATUS.ONLINE: ...
+        if self.status == STATUS.ONLINE:
+            session = USERS_SESSIONS[self.id]
+            session.client.send_tag(tag)
         else: self.queued_chats.append(tag)
 
 
@@ -269,6 +269,7 @@ class Session_Parser:
         recipient, data, chat, type = tag['recipient', 'data', 'chat', 'type']
         # type = [user, group, channel]
         # chat = [text, audio, video]
+        print(type, chat)
 
         top_manager = MANAGERS[type]
         response = top_manager.exists(recipient)
@@ -278,7 +279,6 @@ class Session_Parser:
             tag['sender'] = self.user.id
 
             if chat == CHAT.TEXT: obj.add_chat(tag)
-
             
             response = RESPONSE.SUCCESSFUL
         return response
@@ -302,7 +302,7 @@ class Session_Parser:
             status = {}
             for user in self.user.users_manager:
                 if user.status == STATUS.ONLINE: stat = STATUS.ONLINE
-                else: stat = DATE_TIME(user.last_seen)
+                else: stat = DATETIME(user.last_seen)
 
                 status[user.id] = stat
 
@@ -313,10 +313,8 @@ class Session_Parser:
             tag = Tag(response=RESPONSE.SUCCESSFUL)
         
         elif action in [ACTION.LOGIN, ACTION.SIGNUP]: tag = Tag(response=RESPONSE.SIMULTANEOUS_LOGIN)
-        
-        # tag['date_time'] = DATE_TIME()
-        
         return tag
+
 
 class Session:
 
@@ -334,14 +332,29 @@ class Session:
         self.parser = Session_Parser(self)
 
     def start_session(self):
+        print()
+        print(self.user.groups)
+        print(self.user.channels)
+        print()
         self.user.change_status(STATUS.ONLINE)
 
         self.LOG(f'Listening to {self.user}')#, end='\r')
         while True:
 
+            if self.user.queued_chats:
+                for chat in self.user.queued_chats:
+                    res = self.client.send_tag(chat)
+                    
+                    if res in SOCKET:
+                        # means that client == offline
+                        self.stop_session()
+                        break
+                    time.sleep(.01)
+                self.user.dispense()
+
             tag = self.client.recv_tag()
 
-            if tag in SOCKETS:
+            if tag in SOCKET:
                 # means that client == offline
                 self.stop_session()
                 break
@@ -349,7 +362,7 @@ class Session:
             tag = self.parser.parse(tag)
             soc_resp = self.client.send_tag(tag)
             
-            if soc_resp in SOCKETS:
+            if soc_resp in SOCKET:
                 # means that client == offline
                 self.stop_session()
                 break
@@ -361,6 +374,7 @@ class Session:
 
         self.client._close()
         self.response_server.remove(self)
+
 
 class Response_Server:
 
@@ -374,7 +388,7 @@ class Response_Server:
         while True:
             tag = client.recv_tag()
             
-            if tag in SOCKETS: return
+            if tag in SOCKET: return
             
             action = ACTION[tag.action]
 
@@ -386,7 +400,7 @@ class Response_Server:
                 
                 LOG(response)
                 soc_resp = client.send_tag(Tag(response=response))
-                if soc_resp in SOCKETS: return
+                if soc_resp in SOCKET: return
                 
                 if response == RESPONSE.SUCCESSFUL: user = Users.OBJS[tag.id]
 
@@ -403,11 +417,10 @@ class Response_Server:
                         client.user = user
 
                     else: response = RESPONSE.FALSE_KEY
-                    print(user.key)
                 
                 LOG(response)
                 soc_resp = client.send_tag(Tag(response=response))
-                if soc_resp in SOCKETS: return soc_resp
+                if soc_resp in SOCKET: return soc_resp
 
                 if response == RESPONSE.SUCCESSFUL:
                     session = Session(self, client)
@@ -491,7 +504,6 @@ class Server(Base_All, socket.socket):
             THREAD(self.response_server.add, client)
     
     def saveDatas(self):
-        # print('saving', end='\r')
         SAVE()
 
         time.sleep(500)
@@ -524,18 +536,5 @@ def server_test():
         ade0.add_user(Users.OBJS[n].id)
         ade0.add_group(g)
         ade0.add_channel(c)
-
-    # # LOAD()
-    # # print(Groups.OBJS)
-
-    # # print(ade2.groups)
-    # # print(ade2.channels)
-    tag = ade0.data()
-    # print(tag)
-    en = tag.encode
-    # print(len(en))
-    tag = Tag.decode(en)
-    # print(tag)
-
 
 

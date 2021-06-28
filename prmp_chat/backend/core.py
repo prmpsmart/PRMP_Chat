@@ -5,14 +5,17 @@ class Base_All:
     def __repr__(self): return f'<{self}>'
 
 
-
 # constants
 
 class CONSTANT:
 
     def __init__(self, name, children=[]):
         self.NAME = name.upper()
-        self.CHILDREN = {child.name: child for child in children}
+        self.CHILDREN = {}
+
+        for child in children:
+            if isinstance(child, str): child = CONSTANT(child)
+            self.CHILDREN[child.name] = child
     
     def __len__(self): return len(self.children)
 
@@ -25,78 +28,28 @@ class CONSTANT:
         if isinstance(name, str):
             name = name.upper()
             f = self.__dict__.get(name)
-            if f is None: f = self.__dict__['CHILDREN'][name]
+            if f == None: f = self.__dict__['CHILDREN'].get(name)
             return f
         elif isinstance(name, (int, slice)): return self.list[name]
-        else: return self.__dict__['CHILDREN'][name]
-    __getattr__ = __getitem__
+        elif isinstance(name, (list, tuple)):
+            litu = []
+            for na in name: litu.append(self[na])
+            return litu
+
+    __call__ = __getattr__ = __getitem__
+
     def __eq__(self, other): return str(other).upper() == self.name
 
 
-
-
-CHAT_COLOR = CONSTANT('CHAT_COLOR')
-SENDER = CONSTANT('SENDER')
-RECIPIENT = CONSTANT('RECIPIENT')
-SENDER_TYPE = CONSTANT('SENDER_TYPE')
-KEY = CONSTANT('KEY')
-NAME = CONSTANT('NAME')
-DATE_TIME = CONSTANT('DATE_TIME')
-RESPONSE_TO = CONSTANT('RESPONSE_TO')
-ADD = CONSTANT('ADD')
-REMOVE = CONSTANT('REMOVE')
-CREATE = CONSTANT('CREATE')
-DELETE = CONSTANT('DELETE')
-CHANGE = CONSTANT('CHANGE')
-DATA = CONSTANT('DATA')
-START = CONSTANT('START')
-END = CONSTANT('END')
-SIGNUP = CONSTANT('SIGNUP')
-LOGIN = CONSTANT('LOGIN')
-LOGOUT = CONSTANT('LOGOUT')
-TEXT = CONSTANT('TEXT')
-AUDIO = CONSTANT('AUDIO')
-VIDEO = CONSTANT('VIDEO')
-
-ONLINE = CONSTANT('ONLINE')
-OFFLINE = CONSTANT('OFFLINE')
-LAST_SEEN = CONSTANT('LAST_SEEN')
-
-
-SUCCESSFUL = CONSTANT('SUCCESSFUL')
-FAILED = CONSTANT('FAILED')
-LOGIN_FAILED = CONSTANT('LOGIN_FAILED')
-SIMULTANEOUS_LOGIN = CONSTANT('SIMULTANEOUS_LOGIN')
-EXIST = CONSTANT('EXIST')
-EXTINCT = CONSTANT('EXTINCT')
-FALSE_KEY = CONSTANT('FALSE_KEY')
-
-
-USER_ID = CONSTANT('USER_ID')
-GROUP_ID = CONSTANT('GROUP_ID')
-CHANNEL_ID = CONSTANT('CHANNEL_ID')
-CHAT_ID = CONSTANT('CHAT_ID')
-
-
-ADMIN = CONSTANT('ADMIN')
-USER = CONSTANT('USER')
-GROUP = CONSTANT('GROUP')
-CHANNEL = CONSTANT('CHANNEL')
-
-
-RESET = CONSTANT('RESET')
-CLOSED = CONSTANT('CLOSED')
-ALIVE = CONSTANT('ALIVE')
-
-
-CHAT = CONSTANT('CHAT', [TEXT, AUDIO, VIDEO])
-STATUS = CONSTANT('STATUS', [ONLINE, OFFLINE, LAST_SEEN])
-SOCKET = CONSTANT('SOCKET', [RESET, CLOSED, ALIVE])
-RESPONSE = CONSTANT('RESPONSE', [SUCCESSFUL, FAILED, LOGIN_FAILED, SIMULTANEOUS_LOGIN, EXIST, EXTINCT, FALSE_KEY])
-ID = CONSTANT('ID', [USER_ID, GROUP_ID, CHANNEL_ID, CHAT_ID])
-TYPE = CONSTANT('TYPE', [ADMIN, USER, GROUP, CHANNEL])
-ACTION = CONSTANT('ACTION', [ADD, REMOVE, CREATE, DELETE, CHANGE, DATA, CHAT, START, END, STATUS, SIGNUP, LOGIN, LOGOUT])
-TAG = CONSTANT('TAG', [ACTION, CHAT_COLOR, CHAT, RESPONSE, SENDER, RECIPIENT, SENDER_TYPE, ID, KEY, NAME, DATA, STATUS, DATE_TIME, LAST_SEEN, RESPONSE_TO])
+CHAT = CONSTANT('CHAT', ['TEXT', 'AUDIO', 'VIDEO'])
+STATUS = CONSTANT('STATUS', ['ONLINE', 'OFFLINE', 'LAST_SEEN'])
+SOCKET = CONSTANT('SOCKET', ['RESET', 'CLOSED', 'ALIVE'])
+SOCKET.ERRORS = SOCKET['reset', 'closed']
+RESPONSE = CONSTANT('RESPONSE', ['SUCCESSFUL', 'FAILED', 'LOGIN_FAILED', 'SIMULTANEOUS_LOGIN', 'EXIST', 'EXTINCT', 'FALSE_KEY'])
+ID = CONSTANT('ID', ['USER_ID', 'GROUP_ID', 'CHANNEL_ID', 'CHAT_ID'])
+TYPE = CONSTANT('TYPE', ['ADMIN', 'USER', 'GROUP', 'CHANNEL'])
+ACTION = CONSTANT('ACTION', ['ADD', 'REMOVE', 'CREATE', 'DELETE', 'CHANGE', 'DATA', CHAT, 'START', 'END', STATUS, 'SIGNUP', 'LOGIN', 'LOGOUT'])
+TAG = CONSTANT('TAG', [ACTION, 'CHAT_COLOR', CHAT, RESPONSE, 'SENDER', 'RECIPIENT', 'SENDER_TYPE', ID, 'KEY', 'NAME', 'DATA', STATUS, 'DATE_TIME', 'LAST_SEEN', 'RESPONSE_TO'])
 
 
 class Tag(Base_All, dict):
@@ -112,15 +65,14 @@ class Tag(Base_All, dict):
         return f'Tag({self.kwargs})'
     
     @property
-    def dict(self) -> dict:
-        return dict(**self)
+    def dict(self): return dict(**self)
 
     @property
     def encode(self) -> bytes:
         _dict = {}
 
         for k, v in self.items():
-            if k == DATE_TIME: v = DATETIME(v)
+            if k == TAG.DATE_TIME: v = DATETIME(v)
             elif isinstance(v, CONSTANT): v = v.name
             _dict[k] = v
 
@@ -168,8 +120,11 @@ class Sock(Base_All):
         self.shutdown = self.socket.shutdown
     
     def _close(self):
-        self.socket.shutdown(0)
-        self.socket.close()
+        try:
+            self.socket.shutdown(0)
+            self.socket.close()
+        except Exception as e:
+            ...
     
     def catch(self, func):
         try: return func()
@@ -210,9 +165,9 @@ def EXISTS(manager, obj): return RESPONSE.EXIST if obj in manager else RESPONSE.
 def THREAD(func, *args, **kwargs): threading.Thread(target=func, args=args, kwargs=kwargs).start()
 
 def DATETIME(date_time=None, _int=1):
-    if date_time is None:
+    if date_time == None:
         date_time = QDateTime.currentDateTime()
-        if _int: return DATE_TIME(date_time)
+        if _int: return DATETIME(date_time)
         else: return date_time
 
     if isinstance(date_time, int): return QDateTime.fromSecsSinceEpoch(date_time)
@@ -223,7 +178,7 @@ def TIME(dateTime): return dateTime.toString("HH:mm:ss")
 def DATE(dateTime): return dateTime.toString("yyyy-MM-dd")
 
 # Bases
-
+# 
 
 class Base(Base_All):
 
@@ -264,9 +219,9 @@ class User(Base):
 
     def __init__(self, key='', **kwargs):
         Base.__init__(self, **kwargs)
+        self.change_status(STATUS.OFFLINE)
 
         self.key = key
-        self.status = None
         self.last_seen = None
         
         self.users = {}
@@ -274,8 +229,8 @@ class User(Base):
         self.channels = {}
     
     def change_status(self, status):
-        self.status = status
-        if status == STATUS.OFFLINE: self.last_seen = DATE_TIME()
+        self.status = str(status)
+        if status == STATUS.OFFLINE: self.last_seen = DATETIME()
     
     def add_user(self, user):
         if user.id not in self.users: self.users[user.id] = user

@@ -29,7 +29,7 @@ class Server_Multi_Users(Multi_Users):
         id = tag.id
         if id != self.creator.id:
             if id in self.admins: del self.admins[id]
-            if id in USERS: del USERS[id]
+            if id in self.users: del self.users[id]
 
 class Group(Server_Multi_Users): ...
 
@@ -44,16 +44,17 @@ class Server_User(User):
     
     def dispense(self): self.queued_chats = []
     
+    @property
     def data(self):
         users = {}
         groups = {}
         channels = {}
 
-        for user in USERS.values(): users[user.id] = dict(name=user.name, icon=user.icon)
+        for user in self.users.values(): users[user.id] = dict(name=user.name, icon=user.icon)
         for group in self.groups.values(): groups[group.id] = dict(name=group.name, icon=group.icon, creator=group.creator.id, admins=list(group.admins.keys()), users=list(group.users.keys()), only_admin=group.only_admin)
         for channel in self.channels.values(): channels[channel.id] = dict(name=channel.name, icon=channel.icon, creator=channel.creator.id, admins=list(channel.admins.keys()), users=list(channel.users.keys()))
 
-        tag = Tag(users=users, groups=groups, channels=channels)
+        tag = Tag(name=self.name, users=users, groups=groups, channels=channels)
 
         return tag
     
@@ -269,7 +270,7 @@ class Session_Parser:
         recipient, data, chat, type = tag['recipient', 'data', 'chat', 'type']
         # type = [user, group, channel]
         # chat = [text, audio, video]
-        print(type, chat)
+        # print(type, chat)
 
         top_manager = MANAGERS[type]
         response = top_manager.exists(recipient)
@@ -296,7 +297,7 @@ class Session_Parser:
             func = self.parse_methods[action]
             tag = Tag(response=func(tag))
         
-        elif action == ACTION.DATA: tag = self.user.data()
+        elif action == ACTION.DATA: tag = self.user.data
 
         elif action == ACTION.STATUS:
             status = {}
@@ -332,10 +333,6 @@ class Session:
         self.parser = Session_Parser(self)
 
     def start_session(self):
-        print()
-        print(self.user.groups)
-        print(self.user.channels)
-        print()
         self.user.change_status(STATUS.ONLINE)
 
         self.LOG(f'Listening to {self.user}')#, end='\r')
@@ -345,7 +342,7 @@ class Session:
                 for chat in self.user.queued_chats:
                     res = self.client.send_tag(chat)
                     
-                    if res in SOCKET:
+                    if res in SOCKET.ERRORS:
                         # means that client == offline
                         self.stop_session()
                         break
@@ -354,7 +351,7 @@ class Session:
 
             tag = self.client.recv_tag()
 
-            if tag in SOCKET:
+            if tag in SOCKET.ERRORS:
                 # means that client == offline
                 self.stop_session()
                 break
@@ -362,7 +359,7 @@ class Session:
             tag = self.parser.parse(tag)
             soc_resp = self.client.send_tag(tag)
             
-            if soc_resp in SOCKET:
+            if soc_resp in SOCKET.ERRORS:
                 # means that client == offline
                 self.stop_session()
                 break
@@ -388,7 +385,7 @@ class Response_Server:
         while True:
             tag = client.recv_tag()
             
-            if tag in SOCKET: return
+            if tag in SOCKET.ERRORS: return
             
             action = ACTION[tag.action]
 
@@ -400,7 +397,7 @@ class Response_Server:
                 
                 LOG(response)
                 soc_resp = client.send_tag(Tag(response=response))
-                if soc_resp in SOCKET: return
+                if soc_resp in SOCKET.ERRORS: return
                 
                 if response == RESPONSE.SUCCESSFUL: user = Users.OBJS[tag.id]
 
@@ -420,7 +417,7 @@ class Response_Server:
                 
                 LOG(response)
                 soc_resp = client.send_tag(Tag(response=response))
-                if soc_resp in SOCKET: return soc_resp
+                if soc_resp in SOCKET.ERRORS: return soc_resp
 
                 if response == RESPONSE.SUCCESSFUL:
                     session = Session(self, client)
@@ -536,5 +533,8 @@ def server_test():
         ade0.add_user(Users.OBJS[n].id)
         ade0.add_group(g)
         ade0.add_channel(c)
+    
+    # print(ade0.users)
+    # print(ade0.data)
 
 

@@ -84,7 +84,7 @@ class Chats_Manager(Base_All):
     
     def add_chat(self, tag):
         recipient = tag.recipient
-        print(tag.type)
+        # print(tag.type)
         
         id = tag.sender if recipient == self.user.id else tag.recipient
 
@@ -131,6 +131,7 @@ class Client_User(User):
         users = tag.users
         groups = tag.groups
         channels = tag.channels
+        self.name = tag.name
 
         for id, tag in users.items():
             user = Other_User(id=id, name=tag.get('name'), icon=tag.get('icon'))
@@ -167,14 +168,15 @@ class Client(Socket):
     def set_user(self, user): self.user = user
 
     def _connect(self):
-        if self.connected: return True
+        self.connected = False
         try:
             self.connect((self.ip, self.port))
             self.connected = True
-            return True
-        except:
-            self.connected = False
-            return False
+        except Exception as e:
+            num = e.errno
+            error_message = socket.errorTab[num]
+            if num == 10056: self.connected = True
+        return self.connected
 
     def signup(self, id='', name='', key='', user=None, force=False):
         if not self._connect(): return
@@ -191,12 +193,12 @@ class Client(Socket):
         action = ACTION.SIGNUP
         tag = Tag(id=id, name=name, key=key, action=action)
         soc_resp = self.send_tag(tag)
-        if soc_resp in SOCKET:
+        if soc_resp in SOCKET.ERRORS:
             self.LOG(soc_resp)
             return soc_resp
 
         response_tag = self.recv_tag()
-        if response_tag in SOCKET:
+        if response_tag in SOCKET.ERRORS:
             self.LOG(response_tag)
             return response_tag
 
@@ -209,9 +211,9 @@ class Client(Socket):
         
         return response
 
-
     def login(self, id='', key='', user=None):
-        if not self._connect(): return
+        if not self._connect(): return 
+
         self.LOG('LOGGING IN.')
         
         self.user = user or self.user
@@ -225,10 +227,10 @@ class Client(Socket):
         tag = Tag(id=id, key=key, action=action)
         
         soc_resp = self.send_tag(tag)
-        if soc_resp in SOCKET: return soc_resp
+        if soc_resp in SOCKET.ERRORS: return soc_resp
         
         response_tag = self.recv_tag()
-        if response_tag in SOCKET: return response_tag
+        if response_tag in SOCKET.ERRORS: return response_tag
 
         response = response_tag.response
 
@@ -240,24 +242,30 @@ class Client(Socket):
                 tag = Tag(id=id, key=key, action=ACTION.DATA)
                 
                 soc_resp = self.send_tag(tag)
-                if soc_resp in SOCKET: return soc_resp
+                if soc_resp in SOCKET.ERRORS: return soc_resp
             
                 response_tag = self.recv_tag()
-                if response_tag in SOCKET: return response_tag
+                if response_tag in SOCKET.ERRORS: return response_tag
 
                 self.user.load_data(response_tag)
+            self.user.change_status(STATUS.ONLINE)
         
         return response
     
     def logout(self):
+        if not self._connect(): return self.gone_offlne()
+
         soc_resp = self.send_tag(Tag(action=ACTION.LOGOUT))
+        self.gone_offlne()
         self._close()
         return soc_resp
+    
+    def gone_offlne(self): self.user.change_status(STATUS.OFFLINE)
 
     def start_session(self):
         while True:
             tag = self.recv_tag()
-            if tag in SOCKET: return
+            if tag in SOCKET.ERRORS: return self.gone_offlne()
 
             if len(tag) == 1 and 'response' in tag:
                 # it's a response to a post

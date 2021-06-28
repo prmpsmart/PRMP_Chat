@@ -46,11 +46,6 @@ for a in range(5):
 chm = selfUser.chats
 
 
-# print(len(chm.unseen_chats))
-# print(len(chm.unsent_chats))
-
-
-
 
 
 

@@ -70,7 +70,7 @@ class ChatRoomDelegate(Delegate):
 
             if sender:
                 # draw chat status
-                status = 'X' if chatRoomItem.tag.sent is False else '_/'
+                status = 'X' if chatRoomItem.tag.sent == False else '_/'
                 rect = self.getFontMetrics(option).boundingRect(status)
                 chatStatusRect = QRect(textBox.right()-rect.width()-5, textBox.bottom()-rect.height()-3, rect.width(), rect.height())
                 # painter.drawRoundedRect(chatStatusRect, 7, 7)

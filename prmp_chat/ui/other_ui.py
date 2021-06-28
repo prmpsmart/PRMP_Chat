@@ -1,22 +1,21 @@
-from typing import Set
 from PySide6.QtCore import QDateTime
 from PySide6.QtGui import QFontMetrics
 from PySide6.QtWidgets import QMainWindow, QWidget
-from designer.chat_menu_dialog import *
-from designer.home import Ui_PRMPChat
+from .designer.chat_menu_dialog import *
+from .designer.home import Ui_PRMPChat
 
-from designer.new_contact import Ui_NewContactDialog
-from designer.new_group import Ui_NewGroupDialog
-from designer.new_channel import Ui_NewChannelDialog
-from designer.settings import Ui_SettingsDialog
-from designer.profile import Ui_Profile
-from designer.side_dialog import Ui_SideDialog
-from designer.signup import Ui_Signup
-from designer.login import Ui_Login
-from designer.start import Ui_Start
-from designer.msg import Ui_Msg
+from .designer.new_contact import Ui_NewContactDialog
+from .designer.new_group import Ui_NewGroupDialog
+from .designer.new_channel import Ui_NewChannelDialog
+from .designer.settings import Ui_SettingsDialog
+from .designer.profile import Ui_Profile
+from .designer.side_dialog import Ui_SideDialog
+from .designer.signup import Ui_Signup
+from .designer.login import Ui_Login
+from .designer.start import Ui_Start
+from .designer.msg import Ui_Msg
 
-from prmp_chat.backend.client import *
+from ..backend.client import *
 
 
 class Setups(QWidget):
@@ -87,10 +86,11 @@ class Profile(News):
 
         self.ui.iconButton.setText('')
         self.ui.iconButton.setIconSize(QSize(70, 70))
-        self.ui.iconButton.setIcon(self.user.icon)
-
-        self.ui.nameLineEdit.setText(self.user.name)
-        self.ui.idLineEdit.setText(self.user.id)
+        
+        if self.user:
+            self.ui.iconButton.setIcon(self.user.icon)
+            self.ui.nameLineEdit.setText(self.user.name)
+            self.ui.idLineEdit.setText(self.user.id)
 
 
 
@@ -103,7 +103,7 @@ class SettingsDialog(Popups):
         self.ui.editProfileButton.clicked.connect(self.profileSettings)
     
     def profileSettings(self):
-        profile = Profile(self, self.user)
+        profile = Profile(parent=self, user=self.user)
 
         pos = self.pos()
         geo = self.ui.editProfileButton.geometry()
@@ -120,7 +120,16 @@ class SideDialog(Popups):
         
         self.ui.iconButton.setText('')
         self.ui.iconButton.setIconSize(QSize(70, 70))
-        self.ui.iconButton.setIcon(self.user.icon)
+        if self.user:
+            if self.user.icon: self.ui.iconButton.setIcon(self.user.icon)
+
+            self.ui.nameLabel.setText(self.user.name)
+            self.ui.usernameLabel.setText(self.user.id)
+            if self.user.status == STATUS.ONLINE: text = self.user.status
+            else:
+                datetime = DATETIME(self.user.last_seen)
+                text = f"last login {datetime.toString('yyyy:MM:dd')} at {datetime.toString('HH:mm:ss')}"
+            self.ui.lastLoginLabel.setText(text)
         
         self.ui.newContactButton.clicked.connect(self.openNewContact)
         self.ui.newGroupButton.clicked.connect(self.openNewGroup)
@@ -130,7 +139,7 @@ class SideDialog(Popups):
         self.ui.editButton.clicked.connect(self.openSettings)
     
     def openNewContact(self):
-        newContact = NewContact(self, self.user)
+        newContact = NewContact(parent=self, user=self.user)
 
         pos = self.pos()
         geo = self.ui.newContactButton.geometry()
@@ -139,7 +148,7 @@ class SideDialog(Popups):
         newContact.show()
     
     def openNewGroup(self):
-        newGroup = NewGroup(self, self.user)
+        newGroup = NewGroup(parent=self, user=self.user)
 
         pos = self.pos()
         geo = self.ui.newGroupButton.geometry()
@@ -148,7 +157,7 @@ class SideDialog(Popups):
         newGroup.show()
     
     def openNewChannel(self):
-        newChannel = NewChannel(self, self.user)
+        newChannel = NewChannel(parent=self, user=self.user)
 
         pos = self.pos()
         geo = self.ui.newChannelButton.geometry()
@@ -157,7 +166,7 @@ class SideDialog(Popups):
         newChannel.show()
     
     def openSettings(self):
-        settings = SettingsDialog(self, self.user)
+        settings = SettingsDialog(parent=self, user=self.user)
 
         pos = self.pos()
         geo = self.geometry()
@@ -185,7 +194,6 @@ class Signup(Popups):
 
     def __init__(self, socket=None, **kwargs):
         Popups.__init__(self, **kwargs)
-
         self.ui.signupButton.clicked.connect(self.signup)
         self.socket = socket
     
@@ -197,7 +205,7 @@ class Signup(Popups):
         if username and password and name:
             if self.socket._connect():
                 response = self.socket.signup(username, name, password)
-                if response is RESPONSE.SUCCESSFUL:
+                if response == RESPONSE.SUCCESSFUL:
                     msg = 'Signup Successful, proceed to Login.'
                     self._par.signupResponse()
                 else: msg = str(response)
@@ -206,13 +214,15 @@ class Signup(Popups):
 
         Msg(parent=self, text=msg)
 
+    def showEvent(self, event=0): self._par.changeName('Signup')
+
+
 
 class Login(Popups):
     UI = Ui_Login
 
     def __init__(self, socket=None, **kwargs):
         Popups.__init__(self, **kwargs)
-
         self.ui.loginButton.clicked.connect(self.login)
         self.socket = socket
 
@@ -220,6 +230,8 @@ class Login(Popups):
         username = self.ui.usernameLineEdit.text()
         password = self.ui.passwordLineEdit.text()
         response = ''
+
+        username = password = 'ade0'
 
         # return self._par.loginResponse(RESPONSE.SUCCESSFUL)
 
@@ -231,7 +243,11 @@ class Login(Popups):
         else: msg = 'All fields are required.'
 
         Msg(parent=self, text=msg)
-        if response is RESPONSE.SUCCESSFUL: self._par.loginResponse(response)
+        if response == RESPONSE.SUCCESSFUL: self._par.loginResponse(response)
+    
+    def showEvent(self, event=0): self._par.changeName('Login')
+
+
 
 
 

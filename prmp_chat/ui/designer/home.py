@@ -200,11 +200,11 @@ class Ui_PRMPChat(object):
 
         self.verticalLayout_3.addWidget(self.loginButton)
 
-        self.signupButton = QPushButton(self.frame_2)
-        self.signupButton.setObjectName(u"signupButton")
-        self.signupButton.setMinimumSize(QSize(50, 40))
+        self.logoutButton = QPushButton(self.frame_2)
+        self.logoutButton.setObjectName(u"logoutButton")
+        self.logoutButton.setMinimumSize(QSize(50, 40))
 
-        self.verticalLayout_3.addWidget(self.signupButton)
+        self.verticalLayout_3.addWidget(self.logoutButton)
 
         self.verticalSpacer_2 = QSpacerItem(20, 240, QSizePolicy.Minimum, QSizePolicy.Fixed)
 
@@ -471,7 +471,7 @@ class Ui_PRMPChat(object):
         self.groupButton.setText(QCoreApplication.translate("PRMPChat", u"Groups", None))
         self.channelButton.setText(QCoreApplication.translate("PRMPChat", u"Channels", None))
         self.loginButton.setText(QCoreApplication.translate("PRMPChat", u"Login", None))
-        self.signupButton.setText(QCoreApplication.translate("PRMPChat", u"Signup", None))
+        self.logoutButton.setText(QCoreApplication.translate("PRMPChat", u"Logout", None))
         self.lineEdit.setPlaceholderText(QCoreApplication.translate("PRMPChat", u"Search...", None))
         self.pushButton.setText(QCoreApplication.translate("PRMPChat", u"Search", None))
         self.roomName.setText(QCoreApplication.translate("PRMPChat", u"Chat Name", None))

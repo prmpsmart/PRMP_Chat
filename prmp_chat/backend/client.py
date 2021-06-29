@@ -270,8 +270,7 @@ class Client(Socket):
             if len(tag) == 1 and 'response' in tag:
                 # it's a response to a post
                 ...
-            else:
-                self.parse(tag)
+            else: self.parse(tag)
     
     def parse(self, tag):
         if tag.action == ACTION.STATUS: self.recv_status(tag)

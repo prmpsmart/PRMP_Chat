@@ -7,8 +7,6 @@ from prmp_lib.prmp_miscs.prmp_exts import PRMP_File
 # This object just holds the users together, it does not save chats.
 
 
-SESSIONS = {}
-USERS = {}
 USERS_SESSIONS = {}
 
 
@@ -152,7 +150,7 @@ FILE = os.path.join(FILE_DIR, 'SERVER_DATA.pc')
 
 
 def SAVE():
-    dic = dict(USERS=Users.OBJS, GROUPS=Groups.OBJS, CHANNELS=Channels.OBJS)
+    dic = dict(users=Users.OBJS, groups=Groups.OBJS, channels=Channels.OBJS)
     _file = PRMP_File(FILE, perm='w')
     _file.saveObj(dic)
     _file.save()
@@ -162,9 +160,9 @@ def LOAD():
     dic = _file.loadObj()
     if not dic: return
 
-    Users.OBJS.update(dic['USERS'])
-    Groups.OBJS.update(dic['GROUPS'])
-    Channels.OBJS.update(dic['CHANNELS'])
+    Users.OBJS.update(dic['users'])
+    Groups.OBJS.update(dic['groups'])
+    Channels.OBJS.update(dic['channels'])
 
 
 
@@ -334,10 +332,9 @@ class Session:
 
     def start_session(self):
         self.user.change_status(STATUS.ONLINE)
+        self.LOG(f'Listening to {self.user}\n')
 
-        self.LOG(f'Listening to {self.user}')#, end='\r')
         while True:
-
             if self.user.queued_chats:
                 for chat in self.user.queued_chats:
                     res = self.client.send_tag(chat)
@@ -346,13 +343,12 @@ class Session:
                         # means that client == offline
                         self.stop_session()
                         break
-                    time.sleep(.01)
+                    time.sleep(.1)
                 self.user.dispense()
 
             tag = self.client.recv_tag()
 
             if tag in SOCKET.ERRORS:
-                # means that client == offline
                 self.stop_session()
                 break
 
@@ -360,14 +356,13 @@ class Session:
             soc_resp = self.client.send_tag(tag)
             
             if soc_resp in SOCKET.ERRORS:
-                # means that client == offline
                 self.stop_session()
                 break
 
     def stop_session(self):
         self.user.change_status(STATUS.OFFLINE)
 
-        self.LOG(f'{self.client.address} -> {STATUS.OFFLINE} -> {STATUS.LAST_SEEN}={self.user.last_seen}')
+        self.LOG(f'{self.user} -> {STATUS.OFFLINE} -> {STATUS.LAST_SEEN}={self.user.last_seen}')
 
         self.client._close()
         self.response_server.remove(self)
@@ -380,16 +375,17 @@ class Response_Server:
         self.LOG = server.LOG
 
     def add(self, client):
-        self.LOG(client, 'connected!')
+        # self.LOG(client, 'connected!')
 
         while True:
+            user = None
             tag = client.recv_tag()
             
             if tag in SOCKET.ERRORS: return
             
             action = ACTION[tag.action]
 
-            LOG = lambda val: self.LOG(f'{client} -> {action} -> {val}')
+            LOG = lambda val: self.LOG(f'{user} -> {action} -> {val}')
 
             if action == ACTION.SIGNUP:
 
@@ -407,7 +403,7 @@ class Response_Server:
                 if response == RESPONSE.EXIST:
                     user = Users.OBJS[tag.id]
 
-                    if user.id in USERS or user.status == STATUS.ONLINE: response = RESPONSE.SIMULTANEOUS_LOGIN
+                    if user.id in USERS_SESSIONS or user.status == STATUS.ONLINE: response = RESPONSE.SIMULTANEOUS_LOGIN
 
                     elif user.key == tag.key:
                         response = RESPONSE.SUCCESSFUL
@@ -421,23 +417,12 @@ class Response_Server:
 
                 if response == RESPONSE.SUCCESSFUL:
                     session = Session(self, client)
-
-                    SESSIONS[str(session)] = session
-                    USERS[user.id] = user
                     USERS_SESSIONS[user.id] = session
-
                     session.start_session()
-                    
                     break
 
     def remove(self, session):
-        str_sess = str(session)
-        
-        if str_sess in SESSIONS: del SESSIONS[str_sess]
         id = session.user.id
-        
-        if id in USERS: del USERS[id]
-
         if id in USERS_SESSIONS: del USERS_SESSIONS[id]
 
 

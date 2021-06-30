@@ -1,45 +1,53 @@
+# ----------------------------------------------------------
 import json, threading, socket, os
 from PySide6.QtCore import QDateTime
-
-class Base_All:
-    def __repr__(self): return f'<{self}>'
+# ----------------------------------------------------------
 
 
-# constants
+# ----------------------------------------------------------
+class Mixin:
+    @property
+    def className(self): return self.__class__.__name__
 
-class CONSTANT:
+    def __repr__(self) -> str: return f'<{self}>'
+# ----------------------------------------------------------
 
-    def __init__(self, name, children=[]):
+
+# ----------------------------------------------------------
+class CONSTANT(Mixin):
+
+    def __init__(self, name: str, objects: list=[]):
         self.NAME = name.upper()
-        self.CHILDREN = {}
+        self.OBJECTS = {}
 
-        for child in children:
-            if isinstance(child, str): child = CONSTANT(child)
-            self.CHILDREN[child.name] = child
+        for obj in objects:
+            if isinstance(obj, str): obj = CONSTANT(obj)
+            self.OBJECTS[obj.NAME] = obj
     
-    def __len__(self): return len(self.children)
+    def __len__(self): return len(self.OBJECTS)
 
     @property
-    def list(self): return list(self.children.values())
+    def list(self): return list(self.OBJECTS.values())
     
-    def __str__(self): return self.name
-    def __hash__(self): return hash(self.name)
+    def __str__(self): return self.NAME
+    
+    def __hash__(self): return hash(self.NAME)
+    
     def __getitem__(self, name):
         if isinstance(name, str):
             name = name.upper()
             f = self.__dict__.get(name)
-            if f == None: f = self.__dict__['CHILDREN'].get(name)
+            if f == None: f = self.__dict__['OBJECTS'].get(name)
             return f
-        elif isinstance(name, (int, slice)): return self.list[name]
         elif isinstance(name, (list, tuple)):
             litu = []
             for na in name: litu.append(self[na])
             return litu
+        else: return self.list[name]
 
     __call__ = __getattr__ = __getitem__
 
-    def __eq__(self, other): return str(other).upper() == self.name
-
+    def __eq__(self, other): return str(other).upper() == self.NAME
 
 CHAT = CONSTANT('CHAT', ['TEXT', 'AUDIO', 'VIDEO'])
 STATUS = CONSTANT('STATUS', ['ONLINE', 'OFFLINE', 'LAST_SEEN'])
@@ -50,29 +58,39 @@ ID = CONSTANT('ID', ['USER_ID', 'GROUP_ID', 'CHANNEL_ID', 'CHAT_ID'])
 TYPE = CONSTANT('TYPE', ['ADMIN', 'USER', 'GROUP', 'CHANNEL'])
 ACTION = CONSTANT('ACTION', ['ADD', 'REMOVE', 'CREATE', 'DELETE', 'CHANGE', 'DATA', CHAT, 'START', 'END', STATUS, 'SIGNUP', 'LOGIN', 'LOGOUT'])
 TAG = CONSTANT('TAG', [ACTION, 'CHAT_COLOR', CHAT, RESPONSE, 'SENDER', 'RECIPIENT', 'SENDER_TYPE', ID, 'KEY', 'NAME', 'DATA', STATUS, 'DATE_TIME', 'LAST_SEEN', 'RESPONSE_TO'])
+# ----------------------------------------------------------
 
 
-class Tag(Base_All, dict):
+# ----------------------------------------------------------
+class Tag(Mixin, dict):
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs) -> None:
+        if 'id' in kwargs:
+            id = kwargs['id']
+            kwargs['id'] = id.lower()
+        if 'ID' in kwargs:
+            ID = kwargs['ID']
+            kwargs['ID'] = ID.lower()
+        if 'date_time' in kwargs:
+            date_time = kwargs['date_time']
+            if isinstance(date_time, int): kwargs['date_time'] = DATETIME(date_time)
         if 'DATE_TIME' in kwargs:
             date_time = kwargs['DATE_TIME']
             if isinstance(date_time, int): kwargs['DATE_TIME'] = DATETIME(date_time)
 
         dict.__init__(self, **kwargs)
 
-    def __str__(self) -> str:
-        return f'Tag({self.kwargs})'
+    def __str__(self): return f'Tag({self.kwargs})'
     
     @property
-    def dict(self): return dict(**self)
+    def dict(self) -> dict: return dict(**self)
 
     @property
     def encode(self) -> bytes:
         _dict = {}
 
         for k, v in self.items():
-            if k == TAG.DATE_TIME: v = DATETIME(v)
+            if k in [TAG.DATE_TIME, STATUS, STATUS.LAST_SEEN]: v = DATETIME(v)
             elif isinstance(v, CONSTANT): v = v.name
             _dict[k] = v
 
@@ -110,16 +128,132 @@ class Tag(Base_All, dict):
             return tup
         elif isinstance(attr, str): return self.get(attr.upper())
 
-# socket's send and recv
+    def __setattr__(self, attr, val): self[attr] = val
+# ----------------------------------------------------------
 
 
-class Sock(Base_All):
+# ----------------------------------------------------------
+def EXISTS(manager, obj) -> RESPONSE: return RESPONSE.EXIST if obj in manager else RESPONSE.EXTINCT
 
-    def __init__(self, socket=None):
+def THREAD(func, *args, **kwargs): threading.Thread(target=func, args=args, kwargs=kwargs).start()
+
+def DATETIME(date_time=None, _int=1):
+    if date_time == None:
+        date_time = QDateTime.currentDateTime()
+        if _int: return DATETIME(date_time)
+        else: return date_time
+
+    if isinstance(date_time, int): return QDateTime.fromSecsSinceEpoch(date_time)
+
+    else: return date_time.toSecsSinceEpoch()
+
+def TIME(dateTime: QDateTime) -> str: return dateTime.toString("HH:mm:ss")
+
+def DATE(dateTime: QDateTime) -> str: return dateTime.toString("yyyy-MM-dd")
+# ----------------------------------------------------------
+
+
+# ----------------------------------------------------------
+class Base(Mixin):
+
+    def __init__(self, id: str, name: str='', icon: str=None, date_time: QDateTime=None):
+        self.id = id
+        self.icon = icon
+        self.name = name
+        self.date_time = date_time or QDateTime.currentDateTime()
+    
+    def __str__(self):
+        add = ''
+        if self.name: add = f', name={self.name}'
+        return f'{self.className}(id={self.id}%s)'%add
+
+class _User_Base(Base):
+    
+    def __init__(self, key: str='', **kwargs):
+        Base.__init__(self, **kwargs)
+        self.change_status(STATUS.OFFLINE)
+        self.last_seen = None
+
+class _Multi_Users(Base):
+    only_admin = False
+
+    def __init__(self, **kwargs):
+        Base.__init__(self, **kwargs)
+        self.creator: _User = None
+        self.admins = {}
+        self.users = {}
+        self.last_time: QDateTime = None
+    
+    def add_chat(self, chat) -> None: self.chats.append(chat)
+
+class _User(_User_Base):
+
+    def __init__(self, key='', **kwargs):
+        Base.__init__(self, **kwargs)
+        self.change_status(STATUS.OFFLINE)
+
+        self.key = key
+        self.users = None
+        self.groups = None
+        self.channels = None
+    
+    def change_status(self, status: STATUS) -> None:
+        self.status = str(status)
+        if status == STATUS.OFFLINE: self.last_seen = DATETIME()
+
+    def add_user(self, user: _User_Base) -> None:  self.users.add(user)
+
+    def add_group(self, group: _Multi_Users) -> None: self.groups.add(group)
+    
+    def add_channel(self, channel: _Multi_Users) -> None: self.channels.add(channel)
+
+class _Manager:
+    
+    def __init__(self, user: _User):
+        self.user = user
+        self.objects = {}
+        self.get = self.objects.get
+
+    def add(self, obj: Base) -> None:
+        _obj = self.objects.get(obj.id)
+        if _obj == None: self.objects[obj.id] = obj
+
+    def remove(self, id: str) -> None:
+        obj: Base = self.objects.get(id)
+        if obj != None: del self.objects[id]
+
+    def add_chat(self, chat: Tag) -> None:
+        id: str = chat.recipient
+        obj = self.objects.get(id)
+        if obj != None: obj.add_chat(chat)
+    
+    def __len__(self): return len(self.objects)
+    
+    @property
+    def list(self): return list(self.objects.values())
+
+    def __getitem__(self, name):
+        if isinstance(name, str):
+            f = self.__dict__.get(name)
+            if f == None: f = self.__dict__['objects'].get(name)
+            return f
+        elif isinstance(name, (int, slice)): return self.list[name]
+        elif isinstance(name, (list, tuple)):
+            litu = []
+            for na in name: litu.append(self[na])
+            return litu
+
+# ----------------------------------------------------------
+
+
+# ----------------------------------------------------------
+class Sock(Mixin):
+
+    def __init__(self, socket: socket.socket=None):
         self.socket = socket or self
         self.shutdown = self.socket.shutdown
     
-    def _close(self):
+    def _close(self) -> None:
         try:
             self.socket.shutdown(0)
             self.socket.close()
@@ -139,7 +273,7 @@ class Sock(Base_All):
             # The client socket call close()
             return SOCKET.CLOSED
 
-    def recv_tag(self, buffer=1024):
+    def recv_tag(self, buffer=1024) -> Tag:
         def func():
             encoded = self.socket.recv(buffer)
             if not encoded: raise OSError
@@ -152,90 +286,9 @@ class Sock(Base_All):
             return tag
         return self.catch(func)
 
-    def send_tag(self, tag): return self.catch(lambda:self.socket.send(tag.encode))
+    def send_tag(self, tag): return self.catch(lambda: self.socket.send(tag.encode))
 
     def sendall_tag(self, tag):
         def func(): return self.socket.sendall(tag.encode)
         return self.catch(func)
-
-
-def EXISTS(manager, obj): return RESPONSE.EXIST if obj in manager else RESPONSE.EXTINCT
-
-
-def THREAD(func, *args, **kwargs): threading.Thread(target=func, args=args, kwargs=kwargs).start()
-
-def DATETIME(date_time=None, _int=1):
-    if date_time == None:
-        date_time = QDateTime.currentDateTime()
-        if _int: return DATETIME(date_time)
-        else: return date_time
-
-    if isinstance(date_time, int): return QDateTime.fromSecsSinceEpoch(date_time)
-
-    else: return date_time.toSecsSinceEpoch()
-
-def TIME(dateTime): return dateTime.toString("HH:mm:ss")
-def DATE(dateTime): return dateTime.toString("yyyy-MM-dd")
-
-# Bases
-# 
-
-class Base(Base_All):
-
-    @property
-    def className(self): return self.__class__.__name__
-
-    def __init__(self, id, name='', icon=None, date_time=None):
-        self.id = id
-        self.icon = icon
-        self.name = name
-        self.date_time = date_time or QDateTime.currentDateTime()
-    
-    def __str__(self):
-        add = ''
-        if self.name: add = f', name={self.name}'
-        return f'{self.className}(id={self.id}%s)'%add
-
-class Multi_Users(Base):
-    only_admin = False
-
-    def __init__(self, creator=None, **kwargs):
-        Base.__init__(self, **kwargs)
-        self.creator = creator
-        self.admins = {creator.id: creator} if creator else {}
-        self.users = {}
-        self.chats = []
-        self.last_time = ''
-    
-    def add_user(self, user):
-        if user.id not in self.users: self.users[user.id] = user
-
-    def add_admin(self, admin):
-        if admin.id not in self.admins: self.admins[admin.id] = admin
-    
-    def add_chat(self, chat): self.chats.append(chat)
-
-class User(Base):
-
-    def __init__(self, key='', **kwargs):
-        Base.__init__(self, **kwargs)
-        self.change_status(STATUS.OFFLINE)
-
-        self.key = key
-        self.last_seen = None
-        
-        self.users = {}
-        self.groups = {}
-        self.channels = {}
-    
-    def change_status(self, status):
-        self.status = str(status)
-        if status == STATUS.OFFLINE: self.last_seen = DATETIME()
-    
-    def add_user(self, user):
-        if user.id not in self.users: self.users[user.id] = user
-    def add_group(self, group):
-        if group.id not in self.groups: self.groups[group.id] = group
-    def add_channel(self, channel):
-        if channel.id not in self.channels: self.channels[channel.id] = channel
-
+# ----------------------------------------------------------

@@ -233,7 +233,7 @@ class Login(Popups):
 
         username = password = 'ade0'
 
-        # return self._par.loginResponse(RESPONSE.SUCCESSFUL)
+        return self._par.loginResponse(RESPONSE.SUCCESSFUL)
 
         if username and password:
             if self.socket._connect():

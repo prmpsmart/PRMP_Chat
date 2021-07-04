@@ -19,13 +19,15 @@ class Home(Setups):
     def __init__(self, **kwargs):
         super().__init__(flag=Qt.Widget | Qt.WindowStaysOnTopHint, **kwargs)
 
+        # self.client.LOG = self.clientHook
+
         self.currentChatObject = None
         self.currentChatList = 1
         self.setWindowTitle('PRMP Chat')
 
-        self.ui.chatList.currentChanged = self.chatListCurrentChanged
+        self.ui.chatList.clicked.connect(self.chatListClicked)
 
-        self._flagChanged = True
+        self._flagChanged = False
 
         self.ui.winflag.clicked.connect(self.changeFlag)
         self.ui.loginButton.clicked.connect(self.login)
@@ -35,25 +37,40 @@ class Home(Setups):
         self.changeFlag()
 
         self.loadChatObjects(self.currentChatList)
+
+        # hooks
+        self.parse = self.client.parse
+        self.client.parse = self.clientHook
+        # print(self.client.user.users.get('ade4').status)
+        
+        THREAD(self.client.start_session)
         # self.statusTimer = QTimer(self)
 
 # start of chat functions
-    def chatListLoop(self): ...
-    def chatRoomLoop(self): ...
+    def clientHook(self, tag):
+        self.parse(tag)
+        # print(tag)
+        self.loadChatObjects(self.currentChatList)
+    # def chatRoomLoop(self): ...
 
     def loadChatObjects(self, w=0):
         if not (w and self.client.user): return
         self.currentChatList = w
         self.ui.chatList.clear()
+        
         if w == 1: pcs = self.client.user.users
         elif w == 2: pcs = self.client.user.groups
         elif w == 3: pcs = self.client.user.channels
         
-        def key(a): return a.last_time
+        def key(a):
+            last_time = a.last_time
+            if isinstance(last_time, int): last_time = DATETIME(last_time)
+            return last_time
+
         sorted_pcs = sorted(pcs.objects, key=key, reverse=1)
         for pc in sorted_pcs: self.ui.chatList.add(pc)
 
-    def chatListCurrentChanged(self, index, prev_index):
+    def chatListClicked(self, index):
         current = self.ui.chatList._delegate.item(index)
         self.currentChatObject = current.chatObject
         self.ui.chatRoomList.clear()
@@ -158,7 +175,7 @@ class Home(Setups):
 
     def closeEvent(self, event):
         self.client.stop()
-        SAVE(self.client.user)
+        # SAVE(self.client.user)
         super().closeEvent(event=event)
 
 class Start(Setups):
@@ -204,7 +221,7 @@ class Start(Setups):
             self.launch()
     
     def launch(self):
-        THREAD(self.client.start_session)
+        # THREAD(self.client.start_session)
         
         Home(app=self.app, client=self.client).show()
     

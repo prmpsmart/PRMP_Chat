@@ -1,7 +1,9 @@
-from listBase import Delegate, ListModel, ListView
+from prmp_chat.backend.client import Contact
 from PySide6.QtCore import QMargins, QRect, QPoint, Qt, QRectF, QSize, QPointF, QDateTime
 from PySide6.QtGui import QFontMetrics, QTextOption, QTextDocument, QColor, QFont, QStandardItem, QIcon
 from PySide6.QtWidgets import QStyle
+from prmp_chat.ui.listBase import Delegate, ListModel, ListView
+from prmp_chat.backend.core import *
 
 
 
@@ -17,6 +19,22 @@ class ChatRoomItem:
         self.tag = tag
         self.chatObject = chatObject
 
+        
+        # date_time = self.chatObject.date_time
+        # self.date_time = f'{DATE(date_time)}, {TIME(date_time)}'
+    
+    @property
+    def data(self): return self.tag.data
+    
+    @property
+    def sender(self): return self.tag.sender
+    
+    @property
+    def date_time(self):
+        date_time = self.chatObject.date_time
+        date_time = f'{DATE(date_time)}_{TIME(date_time)}'
+        return date_time
+
 
 class ChatRoomDelegate(Delegate):
     
@@ -25,6 +43,10 @@ class ChatRoomDelegate(Delegate):
     BUBBLE_COLORS = {True: "#90caf9", False: "#a5d6a7"}
 
     offsetFactor = 10
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.tagFont = QFont("Times", 8, QFont.Light)
 
     def _offset(self, rect): return rect.width()/self.offsetFactor
     def offset(self, rect): return rect.width()-self._offset(rect)
@@ -36,22 +58,30 @@ class ChatRoomDelegate(Delegate):
         if chatRoomItem.type == 'chat':
             offset = self.offset(contentRect)
 
-            textRect = self.getFontMetrics(option).boundingRect(contentRect.left(), contentRect.top(), offset, 0, Qt.AlignLeft | Qt.AlignTop | Qt.TextWrapAnywhere, chatRoomItem.tag.data)
+            textRect = self.getFontMetrics(option).boundingRect(contentRect.left(), contentRect.top(), offset, 0, Qt.AlignLeft | Qt.AlignTop | Qt.TextWrapAnywhere, chatRoomItem.data)
 
             toption = QTextOption()
             toption.setWrapMode(QTextOption.WrapAtWordBoundaryOrAnywhere)
 
-            sender = chatRoomItem.chatObject.user.id == chatRoomItem.tag.sender
+            sender = chatRoomItem.chatObject.user.id == chatRoomItem.sender
 
             h = 20 if sender else 10
 
+
             textBox = QRectF(contentRect.left(), contentRect.top(), textRect.right()+10, textRect.height()+h)
+
+            # date_time
+            date_time = chatRoomItem.date_time
+            dateRect = QFontMetrics(self.tagFont).boundingRect(textRect.left(), textRect.top(), 0, 0, Qt.AlignLeft | Qt.AlignTop | Qt.TextSingleLine | Qt.TextDontClip, date_time)
+
+            dateBox = QRectF(textBox.left(), textBox.bottom(), dateRect.width()+5, dateRect.height()+5)
 
             color = QColor(self.BUBBLE_COLORS[sender])
             painter.setBrush(color)
 
             if sender:
                 textBox.moveTo(contentRect.width()-textBox.width()-15, textBox.top())
+                dateBox.moveTo(textBox.right()-dateRect.width()-10, textBox.bottom())
 
                 p1 = textBox.topRight() + QPointF(5, 0)
                 points = p1 + QPoint(-5, 0), p1 + QPoint(10, 0), p1 + QPoint(0, 10)
@@ -59,14 +89,23 @@ class ChatRoomDelegate(Delegate):
             else:
                 p1 = textBox.topLeft()
                 textBox.moveTo(15, textBox.top())
+                dateBox.moveTo(17, textBox.bottom())
+
                 points = p1, p1 + QPoint(15, 0), p1 + QPoint(10, 10)
 
             painter.drawPolygon(points)
             
             textRect.moveTo(textBox.left()+5, textBox.top()+5)
+            dateRect.moveTo(dateBox.left()+2, dateBox.top())
+            dateRect.adjust(0, 0, 3, 0)
+
             painter.drawRoundedRect(textBox, 7, 7)
+            # painter.drawRect(dateBox)
+            painter.drawRoundedRect(dateBox, 5, 5)
+
             painter.setPen(Qt.black)
             painter.drawText(QRectF(textRect), chatRoomItem.tag.data, toption)
+            painter.drawText(QRectF(dateRect), date_time)
 
             if sender:
                 # draw chat status
@@ -83,7 +122,7 @@ class ChatRoomDelegate(Delegate):
         if chatRoomItem.type == 'chat':
             fm = QFontMetrics(option.font)
             needed = fm.boundingRect(0, 0, option.rect.width(), 0, Qt.AlignLeft | Qt.AlignTop | Qt.TextWrapAnywhere, chatRoomItem.tag.data)
-            return QSize(option.rect.width(), needed.height()+sender)
+            return QSize(option.rect.width(), needed.height()+sender+25)
 
 class ChatRoomListModel(ListModel): ...
 
@@ -97,7 +136,7 @@ class ChatRoomList(ListView):
     
     def addObject(self, obj):
         super().addObject(obj)
-        # self.scrollToBottom()
+        self.scrollToBottom()
 
     addChatItem = addObject
 
@@ -119,17 +158,22 @@ class ChatListItem(QStandardItem):
     def name(self): return self.chatObject.name
     
     @property
-    def lastChatDateTime(self): return self.chatObject.last_time
+    def last_time(self): return self.chatObject.last_time
     
     @property
     def date(self):
-        last_time = self.lastChatDateTime
-        if last_time: return last_time.toString("yyyy-MM-dd")
+        last_time = self.last_time
+        if isinstance(last_time, int): last_time = DATETIME(last_time)
+        if isinstance(last_time, QDateTime): return last_time.toString("yyyy-MM-dd")
     
     @property
     def time(self):
-        last_time = self.lastChatDateTime
-        if last_time: return last_time.toString("HH:mm:ss")
+        last_time = self.last_time
+        if isinstance(last_time, int): last_time = DATETIME(last_time)
+        if isinstance(last_time, QDateTime): return last_time.toString("HH:mm:ss")
+
+    @property
+    def date_time(self): return f'{self.date}, {self.time}'
     
     @property
     def _last_chat(self): return self.chatObject.last_chat
@@ -151,13 +195,13 @@ class ChatListDelegate(Delegate):
         super().__init__(parent)
         
         self.iconSize = QSize(48, 48)
-        self.margins = QMargins(8, 8, 8, 8)
+        self.margins = QMargins(8, 0, 8, 8)
 
         self.verticalSpacing = 12
         self.horizontalSpacing = 4
         self.textStart = self.margins.left() + self.iconSize.width() + self.horizontalSpacing
 
-        self.tagFont = QFont("Times", 10, QFont.Light)
+        self.tagFont = QFont("Times", 8, QFont.Light)
         self.nameFont = QFont("Times", 15, QFont.Bold)
         self.chatFont = QFont("Times", 11, QFont.Light)
     
@@ -166,7 +210,6 @@ class ChatListDelegate(Delegate):
     def tagRect(self, tag): return self.textRect(tag, self.tagFont)
 
     def chatRect(self, msg): return self.textRect(msg, self.chatFont)
-
 
     def paint(self, painter, option, index):
         self.initStyleOption(option, index)
@@ -219,27 +262,29 @@ class ChatListDelegate(Delegate):
         #  Draw chat text
         chat = chatListItem.last_chat
         if chat:
-            print(chatListItem.chatObject)
             if len(chat) > self.chatChop:
                 chat = ''.join(chat[:self.chatChop])
                 chat += '...'
 
             msgRect = self.chatRect(chat)
-            msgRect.moveTo(self.textStart, namRect.bottom() + self.verticalSpacing - self.margins.bottom())
+            msgRect.moveTo(self.textStart, namRect.bottom() + self.verticalSpacing - self.margins.bottom()-4)
 
             painter.setFont(self.chatFont)
             painter.drawText(msgRect, Qt.TextSingleLine, chat)
 
         #  Draw date time
         painter.setFont(self.tagFont)
-        date = chatListItem.date
+        chatObject = chatListItem.chatObject
+        if isinstance(chatObject, Contact):
+            status = 'ONLINE' if chatObject.status == STATUS.ONLINE else 'Last seen: ' + chatObject.str_last_seen
+        else: status = 'Status'
+    
+        statusTextRect = self.tagRect(status)
+        statusTextRect.moveTo(contentRect.right()-statusTextRect.width()-self.margins.right(), contentRect.top())
 
-        dateTextRect = self.tagRect(date)
-        dateTextRect.moveTo(contentRect.right()-dateTextRect.width()-self.margins.right(), contentRect.top())
+        painter.drawText(statusTextRect, Qt.TextSingleLine, status)
 
-        painter.drawText(dateTextRect, Qt.TextSingleLine, date)
-
-        time = chatListItem.time
+        time = 'Last time: ' + chatListItem.date_time
         timeTextRect = self.tagRect(time)
         timeTextRect.moveTo(contentRect.right()-timeTextRect.width()-self.margins.right(), contentRect.bottom()-timeTextRect.height()-self.margins.bottom())
 
@@ -250,9 +295,9 @@ class ChatListDelegate(Delegate):
         if count:
             countRect = self.tagRect(count)
 
-            dy = (timeTextRect.top() - dateTextRect.bottom() - countRect.height()) / 2
+            dy = (timeTextRect.top() - statusTextRect.bottom() - countRect.height()) / 2
 
-            countRect.moveTo(contentRect.right()-countRect.width()-20, dateTextRect.bottom() + dy)
+            countRect.moveTo(contentRect.right()-countRect.width()-20, statusTextRect.bottom() + dy)
 
             ds = 2
 

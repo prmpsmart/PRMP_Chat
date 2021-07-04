@@ -102,13 +102,9 @@ class Managers(Mixin):
         id = id.lower()
         response = cls.exists(id)
         if response == RESPONSE.EXTINCT:
-            # try:
-                obj = cls.OBJ(id=id, name=name, **kwargs)
-                cls.add(id, obj)
-                return RESPONSE.SUCCESSFUL
-            # except Exception as e:
-                print(e)
-                return RESPONSE.FAILED
+            obj = cls.OBJ(id=id, name=name, **kwargs)
+            cls.add(id, obj)
+            return RESPONSE.SUCCESSFUL
         else: return response
 
     @classmethod
@@ -573,11 +569,5 @@ def server_test() -> None:
             c.add(j)
             g.add(j)
     Channels.get('c_ade2').add_admin('ade2')
-
-    # for o in ( Channels.OBJS, Groups.OBJS):
-    #     print(o)
-    #     for k in o.values():
-    #         for t in k.objects.values(): print(t.channels.ids)
-    #         print()
 # ----------------------------------------------------------
 

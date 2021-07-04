@@ -115,7 +115,6 @@ class Tag(Mixin, dict):
 
     @property
     def encode(self):
-        print(self.dict)
         string = json.dumps(self.dict)
         encoded = string.encode() + self.DELIMITER
         return encoded
@@ -200,9 +199,13 @@ class _User_Base(Base):
     
     def __init__(self, **kwargs):
         Base.__init__(self, **kwargs)
+        self._status = ''
         self.change_status(STATUS.OFFLINE)
         self.last_seen = None
     
+    @property
+    def status(self): return str(self._status)
+
     @property
     def current_status(self):
         if self.status == STATUS.ONLINE: return self.status
@@ -215,13 +218,13 @@ class _User_Base(Base):
     def str_last_seen(self) -> str: return self.last_seen.toString("yyyy-MM-dd, HH:mm:ss")
 
     def change_status(self, status) -> None:
-        if status == STATUS.ONLINE: self.status = status
+        if status == STATUS.ONLINE: self._status = status
         else:
             if status == STATUS.OFFLINE:
-                self.status = status
+                self._status = status
                 last_seen = None
             else:
-                self.status = STATUS.OFFLINE
+                self._status = STATUS.OFFLINE
                 last_seen = status
             self.last_seen = DATETIME(last_seen, num=0)
 

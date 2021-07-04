@@ -24,7 +24,9 @@ class Delegate(QStyledItemDelegate):
     
     def sizeHint(self, option, index): ...
 
-    def item(self, index): return index.model().data(index)
+    def item(self, index):
+        model = index.model()
+        return model.data(index)
 
 
 class ListModel(QAbstractListModel):

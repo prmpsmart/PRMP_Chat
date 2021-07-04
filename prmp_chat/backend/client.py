@@ -13,7 +13,7 @@ def SAVE(user):
     _file.save()
 
 def LOAD():
-    return
+    # return
     _file = PRMP_File(FILE)
     user = _file.loadObj()
     return user
@@ -170,7 +170,7 @@ class Client:
 
     def signup(self, id='', name='', key='', user=None, force=False):
         if not self._connect(): return
-        self.LOG('Signup Started')
+        # self.LOG('Signup Started')
 
         self.user = user or self.user
 
@@ -230,6 +230,7 @@ class Client:
             if not self.user: self.user = User(id=id, key=key)
             self.restore_data()
             self.user.change_status(STATUS.ONLINE)
+            self.send_status()
         return response
     
     def logout(self):
@@ -251,7 +252,6 @@ class Client:
 
     def start_session(self):
         self.LOG('Listening to Server.')
-        self.send_status()
         while True:
         # while self.user.status == STATUS.ONLINE:
             if self._stop: return
@@ -286,6 +286,7 @@ class Client:
         elif action == ACTION.CREATE: self.recv_create(tag)
         elif action == ACTION.CHANGE: self.recv_change(tag)
         elif action == ACTION.DELETE: self.recv_delete(tag)
+        # self.LOG(tag)
     
     def restore_data(self):
         if self.user: return self.send_data(self.user.id)
@@ -316,7 +317,7 @@ class Client:
         return self.send_tag(tag)
         
     def send_chat(self, recipient, data, chat=CHAT.TEXT, type=TYPE.USER):
-        tag = Tag(recipient=recipient, data=data, chat=chat, type=type, sender=self.user.id, action=ACTION.CHAT)
+        tag = Tag(recipient=recipient, data=data, chat=chat, type=type, sender=self.user.id, action=ACTION.CHAT, date_time=DATETIME())
         return self.send_tag(tag)
 
     def send_start(self, id, type): ...
@@ -327,7 +328,6 @@ class Client:
 
     # receivers
     def recv_data(self, tag):
-        # print(tag)
         if tag.response == RESPONSE.SUCCESSFUL:
             if tag.id == self.user.id: self.user.load_data(tag)
 
@@ -341,16 +341,13 @@ class Client:
 
     def recv_delete(self, tag): ...
 
-    def recv_chat(self, tag):
-        print(tag)
-        self.user.add_chat(tag)
+    def recv_chat(self, tag): self.user.add_chat(tag)
 
     def recv_start(self, tag): ...
 
     def recv_end(self, tag): ...
 
     def recv_status(self, tag):
-        print(tag)
         if tag.id:
             obj = self.user.users.get(tag.id)
             if obj: obj.change_status(tag.status)

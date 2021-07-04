@@ -109,7 +109,7 @@ class ChatRoomList(ListView):
 class ChatListItem(QStandardItem):
     def __init__(self, chatObject):
         self.chatObject = chatObject
-        super().__init__(self.icon, self.lastChat)
+        super().__init__(self.icon, self.last_chat)
         self.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
     
     @property
@@ -122,20 +122,24 @@ class ChatListItem(QStandardItem):
     def lastChatDateTime(self): return self.chatObject.last_time
     
     @property
-    def date(self): return self.lastChatDateTime.toString("yyyy-MM-dd")
+    def date(self):
+        last_time = self.lastChatDateTime
+        if last_time: return last_time.toString("yyyy-MM-dd")
     
     @property
-    def time(self): return self.lastChatDateTime.toString("HH:mm:ss")
+    def time(self):
+        last_time = self.lastChatDateTime
+        if last_time: return last_time.toString("HH:mm:ss")
     
     @property
-    def _lastChat(self): return self.chatObject.lastChat
+    def _last_chat(self): return self.chatObject.last_chat
     
     @property
-    def lastChat(self):
-        if self._lastChat: return self._lastChat.data
+    def last_chat(self):
+        if self._last_chat: return self._last_chat.data
     
     @property
-    def unreadChats(self): return self.chatObject.unread_chats
+    def unread_chats(self): return self.chatObject.unread_chats
     
     @property
     def id(self): return self.chatObject.id
@@ -213,8 +217,9 @@ class ChatListDelegate(Delegate):
         painter.drawText(QRectF(namRect), Qt.TextSingleLine, name)
 
         #  Draw chat text
-        chat = chatListItem.lastChat
+        chat = chatListItem.last_chat
         if chat:
+            print(chatListItem.chatObject)
             if len(chat) > self.chatChop:
                 chat = ''.join(chat[:self.chatChop])
                 chat += '...'
@@ -241,7 +246,7 @@ class ChatListDelegate(Delegate):
         painter.drawText(timeTextRect, Qt.TextSingleLine, time)
 
         # Draw unreadChats
-        count = chatListItem.unreadChats
+        count = chatListItem.unread_chats
         if count:
             countRect = self.tagRect(count)
 

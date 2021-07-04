@@ -1,6 +1,26 @@
 # ----------------------------------------------------------
-import json, threading, socket, os
+import json, threading, socket, os, time
 from PySide6.QtCore import QDateTime
+from prmp_lib.prmp_miscs.prmp_exts import PRMP_File
+# ----------------------------------------------------------
+
+
+# ----------------------------------------------------------
+def THREAD(func, *args, **kwargs): threading.Thread(target=func, args=args, kwargs=kwargs).start()
+
+def DATETIME(date_time=None, num=1):
+    if date_time == None:
+        date_time = QDateTime.currentDateTime()
+        if num: return DATETIME(date_time)
+        else: return date_time
+
+    if isinstance(date_time, int): return QDateTime.fromSecsSinceEpoch(date_time)
+
+    else: return date_time.toSecsSinceEpoch()
+
+def TIME(dateTime: QDateTime) -> str: return dateTime.toString("HH:mm:ss")
+
+def DATE(dateTime: QDateTime) -> str: return dateTime.toString("yyyy-MM-dd")
 # ----------------------------------------------------------
 
 
@@ -17,27 +37,27 @@ class Mixin:
 class CONSTANT(Mixin):
 
     def __init__(self, name: str, objects: list=[]):
-        self.NAME = name.upper()
+        self._NAME = name.upper()
         self.OBJECTS = {}
 
         for obj in objects:
             if isinstance(obj, str): obj = CONSTANT(obj)
-            self.OBJECTS[obj.NAME] = obj
+            self.OBJECTS[obj._NAME] = obj
     
     def __len__(self): return len(self.OBJECTS)
 
     @property
     def list(self): return list(self.OBJECTS.values())
     
-    def __str__(self): return self.NAME
+    def __str__(self): return self._NAME
     
-    def __hash__(self): return hash(self.NAME)
+    def __hash__(self): return hash(self._NAME)
     
     def __getitem__(self, name):
-        if isinstance(name, str):
-            name = name.upper()
+        if isinstance(name, (str, CONSTANT)):
+            name = str(name).upper()
             f = self.__dict__.get(name)
-            if f == None: f = self.__dict__['OBJECTS'].get(name)
+            if f == None: f = self.OBJECTS.get(name)
             return f
         elif isinstance(name, (list, tuple)):
             litu = []
@@ -46,78 +66,105 @@ class CONSTANT(Mixin):
         else: return self.list[name]
 
     __call__ = __getattr__ = __getitem__
+    
+    def __eq__(self, other): return str(other).upper() == self._NAME
 
-    def __eq__(self, other): return str(other).upper() == self.NAME
+    def __getstate__(self):
+        return {'_NAME': self._NAME, 'OBJECTS': list(self.OBJECTS.keys())}
+    
+    def __setstate__(self, state):
+        self._NAME = state['_NAME']
+        self.OBJECTS = {}
+        for k in state['OBJECTS']: self.OBJECTS[k] = CONSTANT(k)
+
+SOCKET = CONSTANT('SOCKET', ['RESET', 'CLOSED', 'ALIVE'])
+SOCKET.ERRORS = SOCKET['RESET', 'CLOSED']
 
 CHAT = CONSTANT('CHAT', ['TEXT', 'AUDIO', 'VIDEO'])
 STATUS = CONSTANT('STATUS', ['ONLINE', 'OFFLINE', 'LAST_SEEN'])
-SOCKET = CONSTANT('SOCKET', ['RESET', 'CLOSED', 'ALIVE'])
-SOCKET.ERRORS = SOCKET['reset', 'closed']
+
 RESPONSE = CONSTANT('RESPONSE', ['SUCCESSFUL', 'FAILED', 'LOGIN_FAILED', 'SIMULTANEOUS_LOGIN', 'EXIST', 'EXTINCT', 'FALSE_KEY'])
 ID = CONSTANT('ID', ['USER_ID', 'GROUP_ID', 'CHANNEL_ID', 'CHAT_ID'])
 TYPE = CONSTANT('TYPE', ['ADMIN', 'USER', 'GROUP', 'CHANNEL'])
 ACTION = CONSTANT('ACTION', ['ADD', 'REMOVE', 'CREATE', 'DELETE', 'CHANGE', 'DATA', CHAT, 'START', 'END', STATUS, 'SIGNUP', 'LOGIN', 'LOGOUT'])
-TAG = CONSTANT('TAG', [ACTION, 'CHAT_COLOR', CHAT, RESPONSE, 'SENDER', 'RECIPIENT', 'SENDER_TYPE', ID, 'KEY', 'NAME', 'DATA', STATUS, 'DATE_TIME', 'LAST_SEEN', 'RESPONSE_TO'])
+TAG = CONSTANT('TAG', [ACTION, 'CHAT_COLOR', CHAT, RESPONSE, 'SENDER', 'RECIPIENT', 'SENDER_TYPE', ID, 'KEY', 'NAME', 'DATA', STATUS, 'DATE_TIME', 'LAST_SEEN', 'RESPONSE_TO', TYPE])
+
+def EXISTS(manager, obj) -> RESPONSE: return RESPONSE.EXIST if obj in manager else RESPONSE.EXTINCT
 # ----------------------------------------------------------
 
 
 # ----------------------------------------------------------
 class Tag(Mixin, dict):
+    DELIMITER = b'<TAG>'
 
     def __init__(self, **kwargs) -> None:
-        if 'id' in kwargs:
-            id = kwargs['id']
-            kwargs['id'] = id.lower()
-        if 'ID' in kwargs:
-            ID = kwargs['ID']
-            kwargs['ID'] = ID.lower()
-        if 'date_time' in kwargs:
-            date_time = kwargs['date_time']
-            if isinstance(date_time, int): kwargs['date_time'] = DATETIME(date_time)
-        if 'DATE_TIME' in kwargs:
-            date_time = kwargs['DATE_TIME']
-            if isinstance(date_time, int): kwargs['DATE_TIME'] = DATETIME(date_time)
-
         dict.__init__(self, **kwargs)
 
-    def __str__(self): return f'Tag({self.kwargs})'
+    def __str__(self): return f'{self.className}({self.kwargs})'
     
     @property
-    def dict(self) -> dict: return dict(**self)
+    def dict(self) -> dict:
+        _dict = {}
+        for k, v in self.items():
+            k = str(k)
+            if isinstance(v, CONSTANT): v = str(v)
+            elif isinstance(v, QDateTime): v = DATETIME(v)
+            elif isinstance(v, Tag): v = v.dict
+            _dict[k] = v
+        return _dict
 
     @property
-    def encode(self) -> bytes:
-        _dict = {}
-
-        for k, v in self.items():
-            if k in [TAG.DATE_TIME, STATUS, STATUS.LAST_SEEN]: v = DATETIME(v)
-            elif isinstance(v, CONSTANT): v = v.name
-            _dict[k] = v
-
-        string = json.dumps(_dict)
-        encoded = string.encode()
+    def encode(self):
+        print(self.dict)
+        string = json.dumps(self.dict)
+        encoded = string.encode() + self.DELIMITER
         return encoded
+    
+    @classmethod
+    def decode(cls, data) -> dict:
+        if (cls.DELIMITER) in data: data = data.replace(cls.DELIMITER, b'')
+
+        _dict = json.loads(data)
+        
+        tag = cls()
+        for k, v in _dict.items():
+            if k in TAG.list:
+                k = TAG[k]
+                if v in k.list: v = k[v]
+            if k == TAG.ID: v = v.lower()
+            elif k == TAG.DATE_TIME: v = DATETIME(v)
+            # elif isinstance(v, dict): v = Tag.decode(json.dumps(v).encode())
+            tag[k] = v
+        return tag
 
     @classmethod
-    def decode(self, data) -> dict:
-        decoded = data.decode()
-        _dict = json.loads(decoded) if data else {}
-        return Tag(**_dict)
+    def decodes(cls, data) -> list:
+        decodes = data.split(cls.DELIMITER)
+        tags = []
+        
+        for tag in decodes:
+            if tag: tags.append(cls.decode(tag))
+
+        return tags
     
     @property
     def kwargs(self) -> str:
         _str = ''
-        for k, v in self.items(): _str += f'{k}="{v}", '
+        for k, v in self.items(): _str += f'{k}={v}, '
         _str = ''.join(_str[:-2])
         return _str
 
-    def __getattr__(self, attr): return self.get(attr.upper()) or self.get(attr.lower())
+    def __getattr__(self, attr):
+        d = self.get(attr)
+        if d == None: d = self.get(attr.upper())
+        if d == None: d = self.get(attr.lower())
+        return d
     
     def __getitem__(self, attr):
         if isinstance(attr, tuple):
             tup = []
             for at in attr:
-                t = self.get(str(at).upper()) or self.get(str(at).lower())
+                t = self[str(at).upper()] or self[str(at).lower()]
                 tup.append(t)
             return tup
         elif isinstance(attr, list):
@@ -129,27 +176,9 @@ class Tag(Mixin, dict):
         elif isinstance(attr, str): return self.get(attr.upper())
 
     def __setattr__(self, attr, val): self[attr] = val
-# ----------------------------------------------------------
 
-
-# ----------------------------------------------------------
-def EXISTS(manager, obj) -> RESPONSE: return RESPONSE.EXIST if obj in manager else RESPONSE.EXTINCT
-
-def THREAD(func, *args, **kwargs): threading.Thread(target=func, args=args, kwargs=kwargs).start()
-
-def DATETIME(date_time=None, _int=1):
-    if date_time == None:
-        date_time = QDateTime.currentDateTime()
-        if _int: return DATETIME(date_time)
-        else: return date_time
-
-    if isinstance(date_time, int): return QDateTime.fromSecsSinceEpoch(date_time)
-
-    else: return date_time.toSecsSinceEpoch()
-
-def TIME(dateTime: QDateTime) -> str: return dateTime.toString("HH:mm:ss")
-
-def DATE(dateTime: QDateTime) -> str: return dateTime.toString("yyyy-MM-dd")
+    def __getstate__(self): return self.__dict__
+    def __setstate__(self, state): self.__dict__.update(state)
 # ----------------------------------------------------------
 
 
@@ -169,10 +198,32 @@ class Base(Mixin):
 
 class _User_Base(Base):
     
-    def __init__(self, key: str='', **kwargs):
+    def __init__(self, **kwargs):
         Base.__init__(self, **kwargs)
         self.change_status(STATUS.OFFLINE)
         self.last_seen = None
+    
+    @property
+    def current_status(self):
+        if self.status == STATUS.ONLINE: return self.status
+        else: return DATETIME(self.last_seen)
+    
+    @property
+    def int_last_seen(self) -> int: return DATETIME(self.last_seen)
+
+    @property
+    def str_last_seen(self) -> str: return self.last_seen.toString("yyyy-MM-dd, HH:mm:ss")
+
+    def change_status(self, status) -> None:
+        if status == STATUS.ONLINE: self.status = status
+        else:
+            if status == STATUS.OFFLINE:
+                self.status = status
+                last_seen = None
+            else:
+                self.status = STATUS.OFFLINE
+                last_seen = status
+            self.last_seen = DATETIME(last_seen, num=0)
 
 class _Multi_Users(Base):
     only_admin = False
@@ -180,15 +231,38 @@ class _Multi_Users(Base):
     def __init__(self, **kwargs):
         Base.__init__(self, **kwargs)
         self.creator: _User = None
-        self.admins = {}
-        self.users = {}
+        self._admins = {}
+        self._users = {}
         self.last_time: QDateTime = None
     
+    def add_admin(self, admin_id: str):
+        if admin_id in self._users: self._admins[admin_id] = self._users[admin_id]
+    
+    def add(self, user): self._users[user.id] = user
+
+    @property
+    def ids(self) -> list: return list(self._users.keys())
+
+    @property
+    def users(self) -> list: return list(self._users.values())
+
+    @property
+    def objects(self) -> list: return self.users
+
+    @property
+    def _objects(self) -> dict: return self._users
+    
+    @property
+    def admin_ids(self) -> list: return list(self._admins.keys())
+
+    @property
+    def admins(self) -> list: return list(self._admins.values())
+
     def add_chat(self, chat) -> None: self.chats.append(chat)
 
 class _User(_User_Base):
 
-    def __init__(self, key='', **kwargs):
+    def __init__(self, key: str='', **kwargs):
         Base.__init__(self, **kwargs)
         self.change_status(STATUS.OFFLINE)
 
@@ -197,10 +271,6 @@ class _User(_User_Base):
         self.groups = None
         self.channels = None
     
-    def change_status(self, status: STATUS) -> None:
-        self.status = str(status)
-        if status == STATUS.OFFLINE: self.last_seen = DATETIME()
-
     def add_user(self, user: _User_Base) -> None:  self.users.add(user)
 
     def add_group(self, group: _Multi_Users) -> None: self.groups.add(group)
@@ -211,33 +281,38 @@ class _Manager:
     
     def __init__(self, user: _User):
         self.user = user
-        self.objects = {}
-        self.get = self.objects.get
+        self._objects = {}
+        self.get = self._objects.get
 
     def add(self, obj: Base) -> None:
-        _obj = self.objects.get(obj.id)
-        if _obj == None: self.objects[obj.id] = obj
+        if obj.id == self.user.id: return
+        
+        _obj = self.get(obj.id)
+        if _obj == None: self._objects[obj.id] = obj
 
     def remove(self, id: str) -> None:
-        obj: Base = self.objects.get(id)
-        if obj != None: del self.objects[id]
+        obj: Base = self.get(id)
+        if obj != None: del self._objects[id]
 
     def add_chat(self, chat: Tag) -> None:
-        id: str = chat.recipient
-        obj = self.objects.get(id)
+        id = chat.recipient
+        obj = self.get(id)
         if obj != None: obj.add_chat(chat)
     
-    def __len__(self): return len(self.objects)
+    def __len__(self): return len(self._objects)
     
     @property
-    def list(self): return list(self.objects.values())
+    def objects(self): return list(self._objects.values())
+
+    @property
+    def ids(self): return list(self._objects.keys())
 
     def __getitem__(self, name):
         if isinstance(name, str):
             f = self.__dict__.get(name)
-            if f == None: f = self.__dict__['objects'].get(name)
+            if f == None: f = self.__dict__['_objects'].get(name)
             return f
-        elif isinstance(name, (int, slice)): return self.list[name]
+        # elif isinstance(name, (int, slice)): return self.list[name]
         elif isinstance(name, (list, tuple)):
             litu = []
             for na in name: litu.append(self[na])
@@ -251,44 +326,66 @@ class Sock(Mixin):
 
     def __init__(self, socket: socket.socket=None):
         self.socket = socket or self
-        self.shutdown = self.socket.shutdown
+        self.state = SOCKET.CLOSED
+        # self.shutdown = self.socket.shutdown
     
+    @property
+    def alive(self): return self.state == SOCKET.ALIVE
+
+    def _connect(self, ip, port):
+        try:
+            self.socket.connect((ip, port))
+            self.state = SOCKET.ALIVE
+        except Exception as e:
+            num = e.errno
+            # error_message = socket.errorTab[num]
+            if num == 10056:
+                try:
+                    self.socket.send(Tag.DELIMITER)
+                    self.socket.state = SOCKET.ALIVE
+                except: self.state = SOCKET.CLOSED
+        return self.alive
+
     def _close(self) -> None:
         try:
+            self.state = SOCKET.CLOSED
             self.socket.shutdown(0)
             self.socket.close()
         except Exception as e:
             ...
     
     def catch(self, func):
-        try: return func()
+        try:
+            result = func()
+            self.state = SOCKET.ALIVE
+            return result
 
         except ConnectionResetError:
             # An existing connection was forcibly closed by the remote client.
             # The terminal of the client socket was terminated.] or closed.
+            self.state = SOCKET.RESET
             return SOCKET.RESET
 
         except OSError:
             # An operation was attempted on something that is not a socket.
             # The client socket call close()
+            self.state = SOCKET.CLOSED
             return SOCKET.CLOSED
-
-    def recv_tag(self, buffer=1024) -> Tag:
+    
+    def recv_tag(self, buffer: int=1048576, many=False) -> Tag:
+        fn = Tag.decodes if many else Tag.decode
         def func():
             encoded = self.socket.recv(buffer)
             if not encoded: raise OSError
-            
-            tag = Tag.decode(encoded)
-
-            if tag.alive == SOCKET.ALIVE:
-                print('SERVER CHECK', tag, end='\r')
-                return func(buffer)
+            tag = fn(encoded)
             return tag
         return self.catch(func)
 
-    def send_tag(self, tag): return self.catch(lambda: self.socket.send(tag.encode))
+    def recv_tags(self) -> Tag: return self.recv_tag(many=True)
 
-    def sendall_tag(self, tag):
+    def send_tag(self, tag: Tag) -> int: return self.catch(lambda: self.socket.send(tag.encode))
+
+    def sendall_tag(self, tag: Tag) -> int:
         def func(): return self.socket.sendall(tag.encode)
         return self.catch(func)
 # ----------------------------------------------------------

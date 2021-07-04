@@ -21,11 +21,11 @@ from ..backend.client import *
 class Setups(QWidget):
     UI = None
 
-    def __init__(self, parent=None, flag=Qt.Widget, user=None, app=None):
+    def __init__(self, parent=None, flag=Qt.Widget, client=None, app=None):
         QWidget.__init__(self, parent, flag)
 
         self._par = parent
-        self.user = user
+        self.client = client
         self.app = app or parent.app
         self.ui = self.UI()
         self.ui.setupUi(self)
@@ -77,7 +77,6 @@ class NewChannel(News):
         News.__init__(self, **kwargs)
 
 
-
 class Profile(News):
     UI = Ui_Profile
 
@@ -86,12 +85,12 @@ class Profile(News):
 
         self.ui.iconButton.setText('')
         self.ui.iconButton.setIconSize(QSize(70, 70))
+        user = self.client.user
         
-        if self.user:
-            self.ui.iconButton.setIcon(self.user.icon)
-            self.ui.nameLineEdit.setText(self.user.name)
-            self.ui.idLineEdit.setText(self.user.id)
-
+        if user:
+            self.ui.iconButton.setIcon(user.icon)
+            self.ui.nameLineEdit.setText(user.name)
+            self.ui.idLineEdit.setText(user.id)
 
 
 class SettingsDialog(Popups):
@@ -103,7 +102,7 @@ class SettingsDialog(Popups):
         self.ui.editProfileButton.clicked.connect(self.profileSettings)
     
     def profileSettings(self):
-        profile = Profile(parent=self, user=self.user)
+        profile = Profile(parent=self, client=self.client)
 
         pos = self.pos()
         geo = self.ui.editProfileButton.geometry()
@@ -120,16 +119,19 @@ class SideDialog(Popups):
         
         self.ui.iconButton.setText('')
         self.ui.iconButton.setIconSize(QSize(70, 70))
-        if self.user:
-            if self.user.icon: self.ui.iconButton.setIcon(self.user.icon)
+        user = self.client.user
 
-            self.ui.nameLabel.setText(self.user.name)
-            self.ui.usernameLabel.setText(self.user.id)
-            if self.user.status == STATUS.ONLINE: text = self.user.status
-            else:
-                datetime = DATETIME(self.user.last_seen)
-                text = f"last login {datetime.toString('yyyy:MM:dd')} at {datetime.toString('HH:mm:ss')}"
+        if user:
+            if user.icon: self.ui.iconButton.setIcon(user.icon)
+            self.ui.nameLabel.setText(user.name)
+            self.ui.usernameLabel.setText(user.id)
+            if user.status == STATUS.ONLINE: text = user.status
+            else: text = f"last login {user.str_last_seen}"
             self.ui.lastLoginLabel.setText(text)
+        else:
+            self.ui.nameLabel.setText('')
+            self.ui.usernameLabel.setText('')
+            self.ui.lastLoginLabel.setText('')
         
         self.ui.newContactButton.clicked.connect(self.openNewContact)
         self.ui.newGroupButton.clicked.connect(self.openNewGroup)
@@ -139,7 +141,7 @@ class SideDialog(Popups):
         self.ui.editButton.clicked.connect(self.openSettings)
     
     def openNewContact(self):
-        newContact = NewContact(parent=self, user=self.user)
+        newContact = NewContact(parent=self, client=self.client)
 
         pos = self.pos()
         geo = self.ui.newContactButton.geometry()
@@ -148,7 +150,7 @@ class SideDialog(Popups):
         newContact.show()
     
     def openNewGroup(self):
-        newGroup = NewGroup(parent=self, user=self.user)
+        newGroup = NewGroup(parent=self, client=self.client)
 
         pos = self.pos()
         geo = self.ui.newGroupButton.geometry()
@@ -157,7 +159,7 @@ class SideDialog(Popups):
         newGroup.show()
     
     def openNewChannel(self):
-        newChannel = NewChannel(parent=self, user=self.user)
+        newChannel = NewChannel(parent=self, client=self.client)
 
         pos = self.pos()
         geo = self.ui.newChannelButton.geometry()
@@ -166,15 +168,13 @@ class SideDialog(Popups):
         newChannel.show()
     
     def openSettings(self):
-        settings = SettingsDialog(parent=self, user=self.user)
+        settings = SettingsDialog(parent=self, client=self.client)
 
         pos = self.pos()
         geo = self.geometry()
 
         settings.move(pos.x()+geo.width()+10, pos.y())
         settings.show()
-
-
 
 
 class Msg(News):
@@ -192,10 +192,9 @@ class Msg(News):
 class Signup(Popups):
     UI = Ui_Signup
 
-    def __init__(self, socket=None, **kwargs):
+    def __init__(self, **kwargs):
         Popups.__init__(self, **kwargs)
         self.ui.signupButton.clicked.connect(self.signup)
-        self.socket = socket
     
     def signup(self):
         username = self.ui.usernameLineEdit.text()
@@ -203,8 +202,8 @@ class Signup(Popups):
         password = self.ui.passwordLineEdit.text()
 
         if username and password and name:
-            if self.socket._connect():
-                response = self.socket.signup(username, name, password)
+            if self.client._connect():
+                response = self.client.signup(username, name, password)
                 if response == RESPONSE.SUCCESSFUL:
                     msg = 'Signup Successful, proceed to Login.'
                     self._par.signupResponse()
@@ -217,37 +216,27 @@ class Signup(Popups):
     def showEvent(self, event=0): self._par.changeName('Signup')
 
 
-
 class Login(Popups):
     UI = Ui_Login
 
-    def __init__(self, socket=None, **kwargs):
+    def __init__(self, **kwargs):
         Popups.__init__(self, **kwargs)
         self.ui.loginButton.clicked.connect(self.login)
-        self.socket = socket
 
     def login(self):
         username = self.ui.usernameLineEdit.text()
         password = self.ui.passwordLineEdit.text()
         response = ''
 
-        username = password = 'ade0'
-
-        return self._par.loginResponse(RESPONSE.SUCCESSFUL)
+        username = password = 'ade1'
 
         if username and password:
-            if self.socket._connect():
-                response = self.socket.login(username, password)
-                msg = str(response)
-            else: msg = 'Connection Problem.'
+            response = self.client.login(username, password)
+            msg = str(response)
         else: msg = 'All fields are required.'
 
         Msg(parent=self, text=msg)
         if response == RESPONSE.SUCCESSFUL: self._par.loginResponse(response)
     
     def showEvent(self, event=0): self._par.changeName('Login')
-
-
-
-
 

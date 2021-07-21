@@ -4,20 +4,6 @@ from .core import *
 from prmp_lib.prmp_miscs.prmp_exts import PRMP_File
 # ----------------------------------------------------------
 
-FILE_DIR = os.path.dirname(__file__)
-FILE = os.path.join(FILE_DIR, 'CLIENT_DATA.pc')
-
-def SAVE(user):
-    _file = PRMP_File(FILE, perm='w')
-    _file.saveObj(user)
-    _file.save()
-
-def LOAD():
-    # return
-    _file = PRMP_File(FILE)
-    user = _file.loadObj()
-    return user
-
 # ----------------------------------------------------------
 class Manager(_Manager):
     OBJ = None
@@ -38,8 +24,6 @@ class Chats:
         self.last_time = tag.date_time
 
         if tag.sender != self.user.id: self.unread_chats += 1
-        else:
-            if self.user.status != STATUS.ONLINE: tag.sent = False
         self.chats.append(tag)
 
     @property
@@ -51,24 +35,29 @@ class Chats:
 
 
 # ----------------------------------------------------------
-class Contact(_User_Base, Chats):
+class Contact(Chats, _User_Base):
 
     def __init__(self, user, tag):
         _User_Base.__init__(self, id=tag.id, name=tag.name, icon=tag.icon)
         Chats.__init__(self, user)
+    
+    def __getstate__(self):
+        self._status = STATUS.OFFLINE
+        return self.__dict__
 
 class Contacts_Manager(Manager):
     OBJ = Contact
     
     def add_chat(self, chat: Tag) -> None:
         id = chat.sender
+        if id == self.user.id: id = chat.recipient
         obj = self.get(id)
         if obj != None: obj.add_chat(chat)
 # ----------------------------------------------------------
 
 
 # ----------------------------------------------------------
-class Multi_Users(_Multi_Users, Chats):
+class Multi_Users(Chats, _Multi_Users):
 
     def __init__(self, user, tag):
         _Multi_Users.__init__(self, id=tag.id, name=tag.name, icon=tag.icon)
@@ -100,6 +89,9 @@ class User(_User):
         self.users = Contacts_Manager(self)
         self.groups = Groups_Manager(self)
         self.channels = Channels_Manager(self)
+        self.unsents = []
+        self.recv_data = False
+        self.recv_tags = False
     
     @property
     def contacts(self): return self.users
@@ -114,12 +106,14 @@ class User(_User):
             for id, _dict in objs.items():
                 tag = Tag(id=id, **_dict)
                 manager.add(tag)
+        self.recv_data = True
     
     def add_chat(self, tag):
         type = tag.type
         if type == TYPE.USER: self.users.add_chat(tag)
         elif type == TYPE.GROUP: self.groups.add_chat(tag)
         elif type == TYPE.CHANNEL: self.channels.add_chat(tag)
+        if not tag.sent: self.unsents.append(tag)
 # ----------------------------------------------------------
 
 
@@ -227,13 +221,18 @@ class Client:
         self.LOG(f'{action} -> {response}')
 
         if response == RESPONSE.SUCCESSFUL:
+            self._stop = False
             if not self.user: self.user = User(id=id, key=key)
-            self.restore_data()
             self.user.change_status(STATUS.ONLINE)
+            self.restore_data()
             self.send_status()
+            self.send_queued_tags()
+
         return response
     
     def logout(self):
+        self.relogin = False
+        self._stop = True
         soc_resp = self.send_tag(Tag(action=ACTION.LOGOUT))
         if isinstance(soc_resp, int):
             self.stop()
@@ -252,9 +251,10 @@ class Client:
 
     def start_session(self):
         self.LOG('Listening to Server.')
+
         while True:
-        # while self.user.status == STATUS.ONLINE:
             if self._stop: return
+            if self.user.recv_data and not self.recv_tags: self.recv_queued_tags()
 
             tags = self.recv_tags()
             if tags in SOCKET.ERRORS:
@@ -318,7 +318,14 @@ class Client:
         
     def send_chat(self, recipient, data, chat=CHAT.TEXT, type=TYPE.USER):
         tag = Tag(recipient=recipient, data=data, chat=chat, type=type, sender=self.user.id, action=ACTION.CHAT, date_time=DATETIME())
-        return self.send_tag(tag)
+        self.user.add_chat(tag)
+
+        return self.send_chat_tag(tag)
+    
+    def send_chat_tag(self, tag):
+        res = self.send_tag(tag)
+        tag.sent = isinstance(res, int)
+        return tag
 
     def send_start(self, id, type): ...
         
@@ -326,6 +333,21 @@ class Client:
 
     def send_status(self): return self.send_tag(Tag(action=ACTION.STATUS))
 
+    def send_queued_tags(self):
+        if self.alive and self.user.unsents:
+            if self._stop: return
+            unsents = []
+
+            for chat in self.user.unsents:
+                tag = self.send_chat_tag(chat)
+                time.sleep(.1)
+                if not tag.sent: unsents.append(chat)
+            
+            self.user.unsents = unsents
+
+        # time.sleep(2)
+        # self.send_queued_tags()
+        
     # receivers
     def recv_data(self, tag):
         if tag.response == RESPONSE.SUCCESSFUL:
@@ -341,7 +363,9 @@ class Client:
 
     def recv_delete(self, tag): ...
 
-    def recv_chat(self, tag): self.user.add_chat(tag)
+    def recv_chat(self, tag):
+        print(tag, 'lllkl')
+        self.user.add_chat(tag)
 
     def recv_start(self, tag): ...
 
@@ -356,5 +380,24 @@ class Client:
                 user = self.user.users.get(id)
                 if user == None: continue
                 user.change_status(status)
+
+    def recv_queued_tags(self):
+        res = self.send_tag(Tag(action=ACTION.QUEUED))
+        if isinstance(res, int): self.user.recv_tags = True
 # ----------------------------------------------------------
 
+
+FILE_DIR = os.path.dirname(__file__)
+FILE = os.path.join(FILE_DIR, 'CLIENT_DATA.pc')
+
+def SAVE(user):
+    return
+    _file = PRMP_File(FILE, perm='w')
+    _file.saveObj(user)
+    _file.save()
+
+def LOAD():
+    # return
+    _file = PRMP_File(FILE)
+    user = _file.loadObj()
+    return user

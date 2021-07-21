@@ -86,7 +86,7 @@ STATUS = CONSTANT('STATUS', ['ONLINE', 'OFFLINE', 'LAST_SEEN'])
 RESPONSE = CONSTANT('RESPONSE', ['SUCCESSFUL', 'FAILED', 'LOGIN_FAILED', 'SIMULTANEOUS_LOGIN', 'EXIST', 'EXTINCT', 'FALSE_KEY'])
 ID = CONSTANT('ID', ['USER_ID', 'GROUP_ID', 'CHANNEL_ID', 'CHAT_ID'])
 TYPE = CONSTANT('TYPE', ['ADMIN', 'USER', 'GROUP', 'CHANNEL'])
-ACTION = CONSTANT('ACTION', ['ADD', 'REMOVE', 'CREATE', 'DELETE', 'CHANGE', 'DATA', CHAT, 'START', 'END', STATUS, 'SIGNUP', 'LOGIN', 'LOGOUT'])
+ACTION = CONSTANT('ACTION', ['ADD', 'REMOVE', 'CREATE', 'DELETE', 'CHANGE', 'DATA', CHAT, 'START', 'END', STATUS, 'SIGNUP', 'LOGIN', 'LOGOUT', 'QUEUED'])
 TAG = CONSTANT('TAG', [ACTION, 'CHAT_COLOR', CHAT, RESPONSE, 'SENDER', 'RECIPIENT', 'SENDER_TYPE', ID, 'KEY', 'NAME', 'DATA', STATUS, 'DATE_TIME', 'LAST_SEEN', 'RESPONSE_TO', TYPE])
 
 def EXISTS(manager, obj) -> RESPONSE: return RESPONSE.EXIST if obj in manager else RESPONSE.EXTINCT
@@ -215,7 +215,8 @@ class _User_Base(Base):
     def int_last_seen(self) -> int: return DATETIME(self.last_seen)
 
     @property
-    def str_last_seen(self) -> str: return self.last_seen.toString("yyyy-MM-dd, HH:mm:ss")
+    def str_last_seen(self) -> str:
+        if self.last_seen: return self.last_seen.toString("yyyy-MM-dd, HH:mm:ss")
 
     def change_status(self, status) -> None:
         if status == STATUS.ONLINE: self._status = status
@@ -253,7 +254,7 @@ class _Multi_Users(Base):
     def objects(self) -> list: return self.users
 
     @property
-    def _objects(self) -> dict: return self._users
+    def _objects(self) -> dict: return self._users.copy()
     
     @property
     def admin_ids(self) -> list: return list(self._admins.keys())
@@ -296,12 +297,11 @@ class _Manager:
     def remove(self, id: str) -> None:
         obj: Base = self.get(id)
         if obj != None: del self._objects[id]
-
-    def add_chat(self, chat: Tag) -> None:
-        id = chat.recipient
-        obj = self.get(id)
-        if obj != None: obj.add_chat(chat)
     
+    def add_chat(self, chat: Tag) -> None:
+        obj = self.get(chat.recipient)
+        if obj != None: obj.add_chat(chat)
+
     def __len__(self): return len(self._objects)
     
     @property

@@ -375,17 +375,6 @@ class Session:
         self.broadcast_status()
 
         while True:
-            if self.user.queued_chats:
-                for chat in self.user.queued_chats:
-                    res = self.client.send_tag(chat)
-                    
-                    if res in SOCKET.ERRORS:
-                        # means that client == offline
-                        self.stop_session()
-                        return
-                    time.sleep(.1)
-                self.user.dispense()
-
             tags = self.client.recv_tags()
 
             if tags in SOCKET.ERRORS:
@@ -423,7 +412,7 @@ class Session_Parser:
         
         self.managers = {TYPE.USER: self.user.users, TYPE.GROUP: self.user.groups, TYPE.CHANNEL: self.user.channels}
         
-        self.parse_methods = {ACTION.ADD: self.add, ACTION.DELETE: self.delete, ACTION.CREATE: self.create, ACTION.REMOVE: self.remove, ACTION.CHANGE: self.change, ACTION.CHAT: self.chat, ACTION.START: self.start, ACTION.END: self.end, ACTION.DATA: self.data, ACTION.STATUS: self.status}
+        self.parse_methods = {ACTION.ADD: self.add, ACTION.DELETE: self.delete, ACTION.CREATE: self.create, ACTION.REMOVE: self.remove, ACTION.CHANGE: self.change, ACTION.CHAT: self.chat, ACTION.START: self.start, ACTION.END: self.end, ACTION.DATA: self.data, ACTION.STATUS: self.status, ACTION.QUEUED: self.queued}
     
     def parse(self, tag: Tag) -> Tag:
         action = tag.action
@@ -434,6 +423,7 @@ class Session_Parser:
         elif action == ACTION.LOGOUT:
             self.session.client.socket.close()
             # tag = Tag(response=RESPONSE.SUCCESSFUL)
+            return
         elif action in [ACTION.LOGIN, ACTION.SIGNUP]: tag = Tag(response=RESPONSE.SIMULTANEOUS_LOGIN)
         return tag
 
@@ -443,6 +433,18 @@ class Session_Parser:
             tag = self.user.data
             tag.update(response=RESPONSE.SUCCESSFUL, action=ACTION.DATA)
             return tag
+    
+    def queued(self, tag):
+        if self.user.queued_chats:
+            for chat in self.user.queued_chats:
+                res = self.client.send_tag(chat)
+                
+                if res in SOCKET.ERRORS:
+                    # means that client == offline
+                    self.stop_session()
+                    return
+                time.sleep(.1)
+            self.user.dispense()
     
     def add(self, tag: Tag) -> Tag:
         type, id = tag['type', 'id']
@@ -524,7 +526,7 @@ class Session_Parser:
             if chat == CHAT.TEXT: obj.add_chat(tag)
             response = RESPONSE.SUCCESSFUL
         # return response
-        return None
+        return
 
     def start(self, tag: Tag) -> RESPONSE:
         ...
@@ -568,6 +570,6 @@ def server_test() -> None:
             u.add_user(j)
             c.add(j)
             g.add(j)
-    Channels.get('c_ade2').add_admin('ade2')
+    # Channels.get('c_ade2').add_admin('ade2')
 # ----------------------------------------------------------
 

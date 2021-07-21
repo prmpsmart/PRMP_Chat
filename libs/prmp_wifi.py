@@ -74,7 +74,7 @@ class WiFi_Manager:
     def __getitem__(self, item): return self.wifi_profiles[item]
     def __len__(self): return len(self[:])
 
-    def __init__(self, app_path='', lists=None):
+    def __init__(self, app_path='', lists=None, parse=0):
 
         """
             This method is used to check if the necessary folder, file is present,
@@ -83,6 +83,7 @@ class WiFi_Manager:
         
         self.interface_name = None
         self.ssid_name = None
+        self._ip = ''
 
         self.app_path = app_path or os.path.dirname(__file__)
         
@@ -94,18 +95,21 @@ class WiFi_Manager:
             self.wifi_profiles = lists
             self.profiles = [lis.name for lis in lists]
 
-        else: self.parse_wifi_profiles()
+        elif parse: self.parse_wifi_profiles()
 
     @property
     def mac(self): return ':'.join(re.findall('..', '%012x'%uuid.getnode()))
 
     @property
     def ip(self):
+        if self._ip: return self._ip
         t = RUN('netsh interface ipv4 show ipaddresses').stdout
         tt = t.splitlines()
 
         for a, b in enumerate(tt):
-            if 'Wi-Fi' in b: return tt[a+4].split()[-1]
+            if 'Wi-Fi' in b:
+                self._ip = tt[a+4].split()[-1]
+                return self._ip
 
     def current_profiles(self):
         profiles = []
@@ -250,4 +254,5 @@ class WiFi_Manager:
         if output.returncode != 0: raise ValueError(output.stderr)
 
 
-
+w = WiFi_Manager()
+print(w.ip, w.connected_to)

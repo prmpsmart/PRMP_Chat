@@ -1,4 +1,4 @@
-from prmp_chat.new_ui.chat_ui import *
+from .widgets import *
 
 
 def _cancel_next(parent, first, next):

@@ -436,20 +436,26 @@ class Emoji_Group(Common):
 
 class Recent_Emoji:
 
-    def __init__(self):
+    def __init__(self, max=30):
         self.emojis = []
+        self.max = 30
     
     def __str__(self): return f'recent({len(self.emojis)})'
     def __repr__(self): return f'<{self}>'
+
     @property
     def name(self): return 'recent'
+
     @property
     def hexcodes(self): return [em.hexcode for em in self.emojis]
     
     def add(self, emoji):
-        hexcode = emoji.hexcode
-        if hexcode in self.hexcodes: del self.emojis[hexcode]
-        self.emojis.insert(0, emoji)
+        all = self.emojis.copy()
+        if emoji in all: all.remove(emoji)
+        all.insert(0, emoji)
+
+        self.emojis = all[:self.max]
+
 
 class EMOJIS(Base):
 

@@ -80,7 +80,7 @@ class CONSTANT(Mixin):
 SOCKET = CONSTANT('SOCKET', ['RESET', 'CLOSED', 'ALIVE'])
 SOCKET.ERRORS = SOCKET['RESET', 'CLOSED']
 
-CHAT = CONSTANT('CHAT', ['TEXT', 'AUDIO', 'VIDEO'])
+CHAT = CONSTANT('CHAT', ['TEXT', 'AUDIO', 'IMAGE', 'VIDEO'])
 STATUS = CONSTANT('STATUS', ['ONLINE', 'OFFLINE', 'LAST_SEEN'])
 
 RESPONSE = CONSTANT('RESPONSE', ['SUCCESSFUL', 'FAILED', 'LOGIN_FAILED', 'SIMULTANEOUS_LOGIN', 'EXIST', 'EXTINCT', 'FALSE_KEY'])
@@ -110,6 +110,7 @@ class Tag(Mixin, dict):
             if isinstance(v, CONSTANT): v = str(v)
             elif isinstance(v, QDateTime): v = DATETIME(v)
             elif isinstance(v, Tag): v = v.dict
+            elif isinstance(v, Base): v = v.id
             _dict[k] = v
         return _dict
 

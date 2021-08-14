@@ -28,8 +28,7 @@ class NewContactDialog(Popups):
         Popups.__init__(self, **kwargs)
 
     def setup_ui(self):
-        self.setStyleSheet(NORMAL_STYLE)
-
+        
         layout = QVBoxLayout(self)
 
 
@@ -59,12 +58,10 @@ class NewGroupDialog(Popups):
         self.resize(350, 200)
         self.setMinimumSize(QSize(350, 200))
         self.setMaximumSize(QSize(350, 200))
-        self.setStyleSheet(NORMAL_STYLE)
-
+        
         self.icon = QPushButton(self)
         self.icon.setText('Image')
         self.icon.setGeometry(QRect(10, 10, 80, 80))
-        self.icon.setStyleSheet(BUTTON_ICON)
 
         self.icon.setAutoDefault(False)
         self.icon.setFlat(False)
@@ -98,12 +95,10 @@ class NewChannelDialog(Popups):
         self.resize(350, 200)
         self.setMinimumSize(QSize(350, 200))
         self.setMaximumSize(QSize(350, 200))
-        self.setStyleSheet(NORMAL_STYLE)
-
+        
         self.icon = QPushButton(self)
         self.icon.setText('Image')
         self.icon.setGeometry(QRect(10, 10, 80, 80))
-        self.icon.setStyleSheet(BUTTON_ICON)
 
         self.icon.setAutoDefault(False)
         self.icon.setFlat(False)
@@ -137,12 +132,10 @@ class ProfileDialog(Popups):
         self.resize(350, 200)
         self.setMinimumSize(QSize(350, 200))
         self.setMaximumSize(QSize(350, 200))
-        self.setStyleSheet(NORMAL_STYLE)
-
+        
         self.icon = QPushButton(self)
         self.icon.setText('Image')
         self.icon.setGeometry(QRect(10, 10, 80, 80))
-        self.icon.setStyleSheet(BUTTON_ICON)
 
         self.icon.setAutoDefault(False)
         self.icon.setFlat(False)
@@ -184,8 +177,7 @@ class SettingsDialog(Popups):
     def setup_ui(self):
         self.resize(176, 222)
         self.setMaximumSize(QSize(278, 411))
-        self.setStyleSheet(NORMAL_STYLE)
-        
+                
         layout = QVBoxLayout(self)
 
         self.edit_button = QPushButton(self)
@@ -225,16 +217,15 @@ class SettingsDialog(Popups):
         profile.show()
 
 
-class SideDialog(Chat_Ui):
+class SideDialog(Popups):
     def __init__(self, client=None):
-        Chat_Ui.__init__(self, client=client)
+        Popups.__init__(self, client=client)
 
     def setup_ui(self):
         self.resize(303, 334)
         self.setMinimumSize(QSize(200, 0))
         self.setMaximumSize(QSize(350, 384))
-        self.setStyleSheet(NORMAL_STYLE)
-
+        
         layout = QVBoxLayout(self)
         layout.setSpacing(12)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -252,7 +243,6 @@ class SideDialog(Chat_Ui):
         self.icon_button = QPushButton(frame)
         self.icon_button.setGeometry(QRect(10, 10, 80, 80))
         self.icon_button.setText("Image")
-        self.icon_button.setStyleSheet(BUTTON_ICON)
 
         self.last_login = QLabel(frame)
         self.last_login.setGeometry(QRect(100, 60, 181, 21))

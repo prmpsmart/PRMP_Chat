@@ -6,6 +6,7 @@ from PySide6.QtWidgets import *
 
 from . import resources
 
+
 class STYLE:
 
     LIGHT = 'white'
@@ -18,7 +19,8 @@ class STYLE:
 
 # open("material-blue.qss").read()
 HOME_STYLE = open(os.path.join(os.path.dirname(__file__), "resources/qss/normal.qss")).read() \
-    % (
+
+def GET_STYLE(): return HOME_STYLE % (
         STYLE.LIGHT_SHADE, STYLE.DARK_SHADE, # QWidget
         STYLE.DARK_SHADE, STYLE.LIGHT, # QPushButton
         STYLE.LIGHT_SHADE, # MenuButton
@@ -33,42 +35,44 @@ HOME_STYLE = open(os.path.join(os.path.dirname(__file__), "resources/qss/normal.
         STYLE.DARK_SHADE, STYLE.LIGHT_SHADE, # QTabBar::tab:hover
 
         STYLE.DARK, STYLE.LIGHT_SHADE, STYLE.LIGHT_SHADE, # QTabBar::tab:selected
-        
-        # STYLE.LIGHT_SHADE, # QTabBar::tab:!selected
         )
 
 
-def SETUP_FRAME(mother_layout=None, orient='v', margins=[], obj=None, re_obj=0, space=0, klass=QFrame):
+def SETUP_FRAME(mother_layout=None, orient='v', margins=[], obj=None, re_obj=0, space=0, klass=QFrame, **kwargs):
     margins = margins or [0, 0, 0, 0]
     
     if orient == 'v': Layout = QVBoxLayout
     elif orient == 'h': Layout = QHBoxLayout
     elif orient == 'g': Layout = QGridLayout
 
-    frame = obj if obj else klass()
+    frame = obj if obj else klass(**kwargs)
     
-    if orient: frame_layout = Layout(frame)
+    frame_layout = None
+    if orient:
+        frame_layout = Layout(frame)
+        frame_layout.setSpacing(space)
+        frame_layout.setContentsMargins(*margins)
 
-    frame_layout.setSpacing(space)
-    frame_layout.setContentsMargins(*margins)
     if mother_layout: mother_layout.addWidget(frame)
     if re_obj: return (frame, frame_layout)
-    else: return frame_layout
+    else: return frame_layout or frame
 
 
-def CREATE_TAB(tab, icon, name, klass=QFrame):
-    frame = klass(tab)
+def CREATE_TAB(tab, icon, name, klass=QFrame, kwargs={}):
+    frame = klass(tab, **kwargs)
     tab.addTab(frame, QIcon(f':{icon}'), name)
     return frame
 
 
-class Scrolled_Widget(QScrollArea):
-    def __init__(self, parent=None, **kwargs):
+class ScrolledWidget(QScrollArea):
+    def __init__(self, parent=None, widget=None, **kwargs):
         QScrollArea.__init__(self, parent)
-        self._widget = QWidget()
+        self._widget = widget or QWidget()
 
         self._layout = SETUP_FRAME(obj=self._widget, **kwargs)
         self.set_widget(self._widget)
+        
+        self.verticalScrollBar().rangeChanged.connect(self.scroll_down)
     
     def set_widget(self, widget):
         self.setWidget(widget)
@@ -82,7 +86,7 @@ class Scrolled_Widget(QScrollArea):
 
 
 
-class Chat_Window(QWidget):
+class ChatWindow(QWidget):
     def __init__(self, parent=None, flag=Qt.Widget, client=None, app=None):
         QWidget.__init__(self, parent, flag)
         self.client = client
@@ -106,7 +110,7 @@ class Chat_Window(QWidget):
             if self.app: self.app.quit()
 
 
-class Popups(Chat_Window):
+class Popups(ChatWindow):
     def __init__(self, **kwargs):
-        Chat_Window.__init__(self, flag=Qt.Popup, **kwargs)
+        ChatWindow.__init__(self, flag=Qt.Popup, **kwargs)
 

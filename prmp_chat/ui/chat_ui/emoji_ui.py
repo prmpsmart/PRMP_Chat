@@ -1,9 +1,9 @@
 
-import os
+import os, emoji
 from PySide6.QtWidgets import *
 from PySide6.QtCore import *
 from PySide6.QtGui import *
-from .widgets import *
+from ..widgets import *
 from libs.prmp_emoji import EMOJIS, Recent_Emoji
 
 
@@ -18,9 +18,7 @@ EMOJI_SPRITE_SHEET = lambda social: _EMOJI_SPRITE_SHEET % social
 
 EMOJI_GROUPS_ICONS = {k: f':emoji_header/{v}.svg' for k, v in dict(recent='clock', smileys_emotion='emoji-happy', people_body='user-group', component='chip', food_drink='cake', travel_places='globe', activities='camera', objects='bell', symbols='hashtag', flags='flag', animals_nature='bug').items()}
 
-EMOJI_IMAGE = 1
 
-EMOJI_SPRITE = None
 
 class Emoji_Sprite:
     
@@ -47,9 +45,6 @@ class Emoji_Sprite:
 
     def __getitem__(self, hexcode): return self.emojis[hexcode]
 
-def SET_SPRITE(social=APPLE):
-    global EMOJI_SPRITE
-    EMOJI_SPRITE = Emoji_Sprite(EMOJI_SPRITE_SHEET(social))
 
 class Emoji_Group_Button(QPushButton):
     def __init__(self, group, callback):
@@ -61,11 +56,35 @@ class Emoji_Group_Button(QPushButton):
         self.setToolTip(group.name.title())
         self.setCheckable(True)
         self.clicked.connect(lambda: callback(group))
+        
+        self._pressed = False
+    
+    def choosen(self):
+        self._pressed = True
+        self.setStyleSheet('background: %s'%STYLE.LIGHT)
+
+    def unchoosen(self):
+        self._pressed = False
+        self.leaveEvent(0)
+    
+    def enterEvent(self, event):
+        if not self._pressed: self.setStyleSheet('background: %s'%STYLE.DARK_SHADE)
+    
+    def leaveEvent(self, event):
+        if not self._pressed: self.setStyleSheet('')
+
 
 class Emoji_Button(QPushButton):
     svg = ''
 
     _font = QFont()
+    EMOJI_IMAGE = 1
+    EMOJI_SPRITE = None
+
+    @staticmethod
+    def SET_SPRITE(social=APPLE):
+       Emoji_Button.EMOJI_SPRITE = Emoji_Sprite(EMOJI_SPRITE_SHEET(social))
+
 
     def __init__(self, emoji, callback):
         QPushButton.__init__(self)
@@ -76,9 +95,9 @@ class Emoji_Button(QPushButton):
         size = 470/11
 
         found = 0
-        if EMOJI_IMAGE == 1: self._image = EMOJI_SPRITE[self._emoji.hexcode]
+        if Emoji_Button.EMOJI_IMAGE == 1: self._image = Emoji_Button.EMOJI_SPRITE[self._emoji.hexcode]
         
-        elif EMOJI_IMAGE == 2 and self.svg:
+        elif Emoji_Button.EMOJI_IMAGE == 2 and self.svg:
             svg = os.path.join(self.svg, emoji.svg)
             found = os.path.isfile(svg)
 
@@ -94,10 +113,20 @@ class Emoji_Button(QPushButton):
         else: self.setText(emoji.emoji)
 
         self.setToolTip(emoji.name.title())
-        self.clicked.connect(lambda: self.callback(self._emoji))
         self.setMinimumHeight(size)
         self.setMinimumWidth(size)
     
+    def enterEvent(self, event):
+        self.setStyleSheet('background: %s'%STYLE.LIGHT_SHADE)
+    
+    def mouseReleaseEvent(self, e): self.leaveEvent(e)
+    
+    def mousePressEvent(self, e):
+        self.setStyleSheet('background: %s'%STYLE.DARK)
+        self.callback(self._emoji)
+    
+    def leaveEvent(self, event): self.setStyleSheet('')
+
     def resizeEvent(self, event):
         w = self.width()
         h = self.height()
@@ -109,42 +138,54 @@ class Emoji_Button(QPushButton):
         else:
             self._font.setPixelSize(s/2)
             self.setFont(self._font)
+            # self.setStyleSheet(f'font-size: {s/2}px')
+
 
 class Emoji_Frame(QFrame):
     def __init__(self, layout):
         QFrame.__init__(self)
         self._layout = SETUP_FRAME(mother_layout=layout, orient='g', margins=[0, 0, 0, 20], obj=self)
         self._layout.setAlignment(Qt.AlignTop)
+        self.set_style(self._style_colors)
 
         self.hide()
         self.setMinimumWidth(470)
+    
+    @property
+    def _style_colors(self): return (STYLE.DARK_SHADE)
 
+    def set_style(self, tup):
+        self.setStyleSheet('background: %s' % tup)
+
+    
 class Emoji_Ui(QWidget):
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, parent=None):
+        super().__init__(parent)
         self.setMinimumWidth(472)
+        # self.setMaximumHeight(200)
+        self.setMinimumHeight(500)
+        self.setWindowFlag(Qt.Tool)
 
         layout = SETUP_FRAME(obj=self)#, margins=[5, 5, 5, 5])
 
         groups_frame, groups_frame_layout = SETUP_FRAME(mother_layout=layout, re_obj=1)
 
-        header_frame_layout = SETUP_FRAME(mother_layout=groups_frame_layout, orient='h')
+        header_frame_layout = SETUP_FRAME(mother_layout=groups_frame_layout, orient='h', space=3)
 
-
-        self.emoji_viewer = Scrolled_Widget()
+        self.emoji_viewer = ScrolledWidget()
         self.emoji_viewer.set_bars_off()
 
         self.timer = QTimer()
         self.timer.timeout.connect(self.visi)
 
-        self.emoji_viewer.setMinimumHeight(233)
+        # self.emoji_viewer.setMinimumHeight(233)
         
         layout.addWidget(groups_frame)
         layout.addWidget(self.emoji_viewer)
         
         self._emojis_frames_ = {}
-        self.buttons_group = QButtonGroup()
+        self.buttons_group = {}
 
         self._groups_ = [Recent_Emoji(60), *EMOJIS.groups]
         
@@ -152,11 +193,9 @@ class Emoji_Ui(QWidget):
             button = Emoji_Group_Button(group, self.change_group)
             header_frame_layout.addWidget(button)
 
-            self.buttons_group.addButton(button)
+            self.buttons_group[group.name] = button
             
             self._emojis_frames_[group.name] = Emoji_Frame(self.emoji_viewer._layout)
-
-        self.show()
     
     def showEvent(self, event):
         timer = QTimer()
@@ -171,7 +210,6 @@ class Emoji_Ui(QWidget):
         timer.stop()
     
     def arrange_emojis(self, group, layout, sort=1):
-        
         if sort: emojis = sorted(group.emojis)
         else: emojis = group.emojis
 
@@ -188,26 +226,30 @@ class Emoji_Ui(QWidget):
     def change_group(self, group):
         n = group.name
         for name, frame in self._emojis_frames_.items():
-            if n == name: frame.show()
-            else: frame.hide()
+            button = self.buttons_group[name]
+            if n == name:
+                frame.show()
+                button.choosen()
+            else:
+                frame.hide()
+                button.unchoosen()
         
         if group.name == 'recent':
             frame = self._emojis_frames_['recent']
-
             grid = frame.layout()
             grid.setAlignment(Qt.AlignTop)
-
             self.arrange_emojis(group, grid, 0)
             frame.setLayout(grid)
 
         self.timer.start(50)
-        
+    
     def visi(self):
         self.emoji_viewer.ensureVisible(0, 0, 0, 0)
         self.timer.stop()
     
     def emoji_clicked(self, emoji):
         self._groups_[0].add(emoji)
+        print(emoji)
         # print(self._groups_[0].emojis)
 
 

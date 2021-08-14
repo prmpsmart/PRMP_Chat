@@ -231,9 +231,9 @@ class ChatRoomObjectWidget(QFrame):
         else: return None
 
 
-class ChatRoomView(Scrolled_Widget):
+class ChatRoomView(ScrolledWidget):
         def __init__(self):
-            Scrolled_Widget.__init__(self)
+            ScrolledWidget.__init__(self)
             # self.setStyleSheet('.QWidget{background-image: url(resources/images/background.svg); background-repeat: repeat-xy; background-color: #dfdbe5;}')
 
 
@@ -478,7 +478,7 @@ class ChatObjectsWidget(QFrame):
         
         title_frame_layout.addWidget(refresh_button)
 
-        self.chats_widget = Scrolled_Widget()
+        self.chats_widget = ScrolledWidget()
         self._layout.addWidget(self.chats_widget)
 
     def add_objects(self, obj): ...

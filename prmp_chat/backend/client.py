@@ -4,6 +4,8 @@ from .core import *
 from prmp_lib.prmp_miscs.prmp_exts import PRMP_File
 # ----------------------------------------------------------
 
+TYPE.add('CONTACT')
+
 # ----------------------------------------------------------
 class Manager(_Manager):
     OBJ = None
@@ -13,6 +15,7 @@ class Manager(_Manager):
         obj = self.OBJ(self.user, tag)
         super().add(obj)
 
+
 class Chats:
     def __init__(self, user):
         self.user = user
@@ -21,7 +24,7 @@ class Chats:
         self.last_time = QDateTime.currentDateTime()
 
     def add_chat(self, tag):
-        self.last_time = tag.date_time
+        self.last_time = tag.date_time or QDateTime.currentDateTime()
 
         if tag.sender != self.user.id: self.unread_chats += 1
         self.chats.append(tag)
@@ -34,8 +37,16 @@ class Chats:
 # ----------------------------------------------------------
 
 
+class User_Base:
+    
+    def set_icon(self, file):
+        file = PRMP_File(file)
+        self.icon = file.base64Data
+        self.ext = file.ext
+
 # ----------------------------------------------------------
-class Contact(Chats, _User_Base):
+
+class Contact(Chats, _User_Base, User_Base):
 
     def __init__(self, user, tag):
         _User_Base.__init__(self, id=tag.id, name=tag.name, icon=tag.icon)
@@ -67,22 +78,26 @@ class Multi_Users(Chats, _Multi_Users):
         self._admins = tag.admins
         self._users = tag.users
 
+
 class Group(Multi_Users):
     
     def __init__(self, user, tag):
         super().__init__(user, tag)
         self.only_admin = tag.only_admin
 
+
 class Groups_Manager(Manager): OBJ = Group
 
+
 class Channel(Multi_Users): only_admin = True
+
 
 class Channels_Manager(Manager): OBJ = Channel
 # ----------------------------------------------------------
 
 
 # ----------------------------------------------------------
-class User(_User):
+class User(_User, User_Base):
 
     def __init__(self, **kwargs):
         _User.__init__(self, **kwargs)
@@ -99,6 +114,7 @@ class User(_User):
     def load_data(self, tag):
         self.name = tag.name
         self.icon = tag.icon
+        self.ext = tag.ext
 
         data = dict(users=tag.users, groups=tag.groups, channels=tag.channels)
         for name, objs in data.items():
@@ -110,10 +126,12 @@ class User(_User):
     
     def add_chat(self, tag):
         type = tag.type
-        if type == TYPE.USER: self.users.add_chat(tag)
+        if type in [TYPE.USER, TYPE.CONTACT]: self.users.add_chat(tag)
         elif type == TYPE.GROUP: self.groups.add_chat(tag)
         elif type == TYPE.CHANNEL: self.channels.add_chat(tag)
-        if not tag.sent: self.unsents.append(tag)
+        else: return
+
+        if tag.sender == self.id and not tag.sent: self.unsents.append(tag)
 # ----------------------------------------------------------
 
 
@@ -124,6 +142,7 @@ class Socket(socket.socket, Sock):
         socket.socket.__init__(self, *args, **kwargs)
         Sock.__init__(self)
 
+
 class Client:
     'Client socket for connection with the server.'
     
@@ -131,15 +150,15 @@ class Client:
         return f'Client(ip={self.ip}, port={self.port})'
 
     def __init__(self, ip='localhost', port=7767, user=None, relogin=0, LOG=print):
-        
         self.create_socket()
-        self._stop = False
+
+        self._stop = False # stop connection or try to relogin
         self.ip = ip
         self.port = port
         self.user = user
         
-        self.relogin = relogin
-        self.LOG = LOG
+        self.relogin = relogin # try to relogin after connection failure
+        self.LOG = LOG # a function or method to receive logs, defaults if print()
     
     def create_socket(self):
         self.socket = Socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -156,15 +175,16 @@ class Client:
 
     def _connect(self):
         if self.alive: return True
+
         alive = self.socket._connect(self.ip, self.port)
         if not alive:
             self.create_socket()
             alive = self.socket._connect(self.ip, self.port)
         return alive
 
-    def signup(self, id='', name='', key='', user=None, force=False):
+    def signup(self, id='', name='', key='', user=None, force=False, login=False, start=False):
         if not self._connect(): return
-        # self.LOG('Signup Started')
+        self.LOG('Signup Started')
 
         self.user = user or self.user
 
@@ -192,15 +212,16 @@ class Client:
 
         if response == RESPONSE.SUCCESSFUL:
             if not self.user: self.user = User(id=id, name=name, key=key)
+            if login: self.login(start=start)
         
         return response
 
-    def login(self, id='', key='', user=None):
+    def login(self, id='', key='', user=None, start=False):
         if not self._connect(): return SOCKET.CLOSED
-        # self.LOG('Login Started')
-        if self.user and self.user.status == STATUS.ONLINE: return RESPONSE.SIMULTANEOUS_LOGIN
+        self.LOG('Login Started')
 
         self.user = user or self.user
+        if self.user and self.user.status == STATUS.ONLINE: return RESPONSE.SIMULTANEOUS_LOGIN
 
         assert (id and key) or self.user, 'Provide [id, key] or user'
         
@@ -209,26 +230,66 @@ class Client:
 
         action = ACTION.LOGIN
         tag = Tag(id=id, key=key, action=action)
-        
+
+        success = 1
+
         soc_resp = self.send_tag(tag)
-        if soc_resp in SOCKET.ERRORS: return soc_resp
+        if soc_resp in SOCKET.ERRORS:
+            success = 0
+            response = soc_resp
         
-        response_tag = self.recv_tags()
-        if response_tag in SOCKET.ERRORS: return response_tag
+        else:
+            response_tag = self.recv_tags()
+            if response_tag in SOCKET.ERRORS:
+                success = 0
+                response = response_tag
 
-        response = response_tag[0].response
+        if success:
+            response = response_tag[0].response
+            self.LOG(f'{action} -> {response}')
 
-        self.LOG(f'{action} -> {response}')
+            if response == RESPONSE.SUCCESSFUL:
+                self._stop = False
 
-        if response == RESPONSE.SUCCESSFUL:
-            self._stop = False
-            if not self.user: self.user = User(id=id, key=key)
-            self.user.change_status(STATUS.ONLINE)
-            self.restore_data()
-            self.send_status()
-            self.send_queued_tags()
+                if not self.user: self.user = User(id=id, key=key)
+                self.user.change_status(STATUS.ONLINE)
 
+                self.restore_data()
+                self.send_status()
+                self.send_queued_tags()
+
+                if start: self.start_session()
+
+        elif self.relogin: self.re_login()
+        
         return response
+
+    def re_login(self):
+        while self.user.status == STATUS.OFFLINE:
+            if self._stop: return
+
+            res = self.login()
+            if res in [RESPONSE.SUCCESSFUL, RESPONSE.SIMULTANEOUS_LOGIN]: return res
+            # elif res == SOCKET.CLOSED: self.create_socket()
+            time.sleep(1)
+    
+    def start_session(self):
+        self.LOG('Listening to Server.')
+
+        while True:
+            if self._stop: return
+            if self.user.recv_data and not self.user.recv_tags: self.recv_queued_tags()
+
+            tags = self.recv_tags()
+            if tags in SOCKET.ERRORS:
+                self.gone_offline()
+                res = ''
+                if self.relogin:
+                    self.LOG('RE-LOGIN in progress!')
+                    res = self.re_login()
+                
+                if res not in  [RESPONSE.SUCCESSFUL, RESPONSE.SIMULTANEOUS_LOGIN]: return
+            for tag in tags: self.parse(tag)
     
     def logout(self):
         self.relogin = False
@@ -249,33 +310,6 @@ class Client:
             self.user.change_status(STATUS.OFFLINE)
             self.LOG('GONE OFFLINE', self.user.str_last_seen)
 
-    def start_session(self):
-        self.LOG('Listening to Server.')
-
-        while True:
-            if self._stop: return
-            if self.user.recv_data and not self.recv_tags: self.recv_queued_tags()
-
-            tags = self.recv_tags()
-            if tags in SOCKET.ERRORS:
-                self.gone_offline()
-                res = ''
-                if self.relogin:
-                    self.LOG('RE-LOGIN in progress!')
-                    res = self.re_login()
-                
-                if res not in  [RESPONSE.SUCCESSFUL, RESPONSE.SIMULTANEOUS_LOGIN]: return
-            for tag in tags: self.parse(tag)
-    
-    def re_login(self):
-        while self.user.status == STATUS.OFFLINE:
-            if self._stop: return
-
-            res = self.login()
-            if res in [RESPONSE.SUCCESSFUL, RESPONSE.SIMULTANEOUS_LOGIN]: return res
-            # elif res == SOCKET.CLOSED: self.create_socket()
-            time.sleep(1)
-    
     def parse(self, tag):
         action = tag.action
         if action == ACTION.STATUS: self.recv_status(tag)
@@ -286,7 +320,6 @@ class Client:
         elif action == ACTION.CREATE: self.recv_create(tag)
         elif action == ACTION.CHANGE: self.recv_change(tag)
         elif action == ACTION.DELETE: self.recv_delete(tag)
-        # self.LOG(tag)
     
     def restore_data(self):
         if self.user: return self.send_data(self.user.id)
@@ -303,32 +336,32 @@ class Client:
     def send_remove(self, id, type):
         tag = Tag(action=ACTION.REMOVE, type=type, id=id)
         return self.send_tag(tag)
-        
+
     def send_create(self, id, type, name, icon):
         tag = Tag(action=ACTION.CREATE, type=type, id=id, name=name, icon=icon)
         return self.send_tag(tag)
-        
+
     def send_change(self, id, change, type, data):
         tag = Tag(action=ACTION.CHANGE, change=change, type=type, id=id, data=data)
         return self.send_tag(tag)
-        
+
     def send_delete(self, id, type):
         tag = Tag(action=ACTION.DELETE, type=type, id=id)
         return self.send_tag(tag)
-        
-    def send_chat(self, recipient, data, chat=CHAT.TEXT, type=TYPE.USER):
-        tag = Tag(recipient=recipient, data=data, chat=chat, type=type, sender=self.user.id, action=ACTION.CHAT, date_time=DATETIME())
+
+    def send_chat(self, recipient, text='', data='', chat=CHAT.TEXT, type=TYPE.USER):
+        tag = Tag(recipient=recipient, data=data, chat=chat, type=type, sender=self.user.id, action=ACTION.CHAT, date_time=DATETIME(), text=text)
         self.user.add_chat(tag)
 
         return self.send_chat_tag(tag)
-    
+
     def send_chat_tag(self, tag):
         res = self.send_tag(tag)
         tag.sent = isinstance(res, int)
         return tag
 
     def send_start(self, id, type): ...
-        
+    
     def send_end(self, id, type): ...
 
     def send_status(self): return self.send_tag(Tag(action=ACTION.STATUS))
@@ -347,7 +380,8 @@ class Client:
 
         # time.sleep(2)
         # self.send_queued_tags()
-        
+
+
     # receivers
     def recv_data(self, tag):
         if tag.response == RESPONSE.SUCCESSFUL:
@@ -364,7 +398,6 @@ class Client:
     def recv_delete(self, tag): ...
 
     def recv_chat(self, tag):
-        print(tag, 'lllkl')
         self.user.add_chat(tag)
 
     def recv_start(self, tag): ...
@@ -391,10 +424,11 @@ FILE_DIR = os.path.dirname(__file__)
 FILE = os.path.join(FILE_DIR, 'CLIENT_DATA.pc')
 
 def SAVE(user):
-    return
+    # return
     _file = PRMP_File(FILE, perm='w')
     _file.saveObj(user)
     _file.save()
+
 
 def LOAD():
     # return

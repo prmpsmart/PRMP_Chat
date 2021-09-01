@@ -1,3 +1,4 @@
+from base64 import b64decode
 from ..widgets import *
 from ...backend.client import *
 
@@ -80,10 +81,10 @@ class ChatLineEdit(QLineEdit):
             
             gw = self.gw - m
             mh = (h-gw)/4
-            g = (w-gw, mh, gw, gw-mh)
-
-            self.button.setIconSize(QSize(20, 20))
-            self.button.setMaximumHeight(gw)
+            g = (w-gw, mh+3, gw-3, gw-mh-10)
+            # self.button.setIconSize(QSize(20, 20))
+            # self.button.setMaximumHeight(gw)
+            self.button.setFixedSize(QSize(27, 27))
             self.button.setGeometry(*g)
 
     resizeEvent = showEvent
@@ -93,30 +94,9 @@ class ChatLineEdit(QLineEdit):
     def add_default_value(self, value): self.default_values.append(value)
 
 
-class IconButton(QPushButton):
-    def __init__(self, parent=None, icon_size=25, icon='', size=0):
-        QPushButton.__init__(self, parent)
-
-        self.setIconSize(QSize(icon_size+10, icon_size))
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self._style = 'text-align: center'
-        self.default_style = lambda: self.setStyleSheet(self._style)
-        self.default_style()
-
-        self.set_icon(icon)
-        if size:
-            self.setMinimumSize(size, size)
-            self.setMaximumSize(size, size)
-    
-    def set_icon(self, icon):
-        if isinstance(icon, bytes): icon = QPixmap().fromImage(QImage(icon))
-        elif icon and isinstance(icon, str): icon = f':{icon}'
-        elif not icon: icon = ':chat_list/user.svg'
-
-        icon = QIcon(icon)
-        self.setIcon(icon)
-    
-    def mouseReleaseEvent(self, event): self.default_style()
+class IconButton(ImageButton):
+    def __init__(self, **kwargs):
+        ImageButton.__init__(self, **kwargs)
 
 
 class ChatWidget(QFrame):
@@ -143,7 +123,7 @@ class ChatWidget(QFrame):
         self.icon_frame.setMaximumSize(d, d)
         self.icon_frame.setStyleSheet('border-radius: %spx'%(d/2))
 
-        self.icon = IconButton(icon_size=d-10)
+        self.icon = IconButton(offset=10)
         icon_layout.addWidget(self.icon)
 
         if isinstance(chat_object, Contact): self.status_bubble = QLabel(self.icon_frame)
@@ -206,11 +186,12 @@ class ChatWidget(QFrame):
         self.unread_bubble.setText(unread)
         self.ubr = self.ufm.boundingRect(unread)
         
-        chats = self.chat_object.chats[:]
-        if chats:
-            c = chats[-1].data
-            if len(c) > 50: c = ''.join(c[:50])
-            self.last_info.setText(c + '...')
+        last_chat = self.chat_object.last_chat
+        if last_chat:
+            last_text = last_chat.text
+            if last_text:
+                if len(last_text) > 50: last_text = ''.join(last_text[:50])
+                self.last_info.setText(last_text + '...')
     
     def enterEvent(self, event):
         if not self.isCurrent: self.setStyleSheet(self._style % (STYLE.LIGHT, STYLE.DARK))
@@ -254,16 +235,15 @@ class ChatWidget(QFrame):
     
     resizeEvent = showEvent
 
-
 class ChatsList(ScrolledWidget):
 
-    def __init__(self, tab, client, attr='contacts', callback=None):
+    def __init__(self, tab, user, attr='contacts', callback=None):
         ScrolledWidget.__init__(self, tab, space=2, margins=[2, 2, 2, 2])
         self._layout.setAlignment(Qt.AlignTop)
         self.set_bars_off()
         self.current = None
         self._callback = callback
-        self.client = client
+        self.user = user
         self.attr = attr
 
         self._chats_objects_ = {}
@@ -278,12 +258,16 @@ class ChatsList(ScrolledWidget):
         self._chats_objects_[chat_object] = chat
 
     def fill(self):
-        if self.client:
-            manager = getattr(self.client, self.attr)
-            for obj in manager.objects: self.add_chat_object(obj)
+        if self.user:
+            manager = getattr(self.user, self.attr, None)
+            if manager:
+                for obj in manager.objects: self.add_chat_object(obj)
 
     def callback(self, chat_widget: ChatWidget, q=1):
-        if self.current: self.current.uncheck()
+        if self.current:
+            try: self.current.uncheck()
+            except: ...
+
         self.current = chat_widget
         # self._layout.insertWidget(0, self.current)
         if q: self._callback(chat_widget.chat_object)
@@ -297,4 +281,39 @@ class ChatsList(ScrolledWidget):
         if widget: self.callback(widget, q=0)
 
 
+class SearchList(ChatsList):
 
+    def __init__(self, tab, **kwargs):
+        super().__init__(tab, **kwargs)
+
+        self.chats_objects = [*self.user.users[:], *self.user.groups[:], *self.user.channels[:]]
+        self.searched_objects = []
+    
+    def clear(self):
+        dd = list(self._chats_objects_.items())
+        for a, b in dd:
+            b.deleteLater()
+            del self._chats_objects_[a]
+        self.searched_objects = []
+    
+    def add_searched_objects(self, so):
+        if so in self.searched_objects: return
+        self.searched_objects.append(so)
+
+    def search(self, text):
+        self.clear()
+
+        if not text: return
+
+        for co in self.chats_objects:
+            if text in co.name.lower() or text in co.id.lower(): self.add_searched_objects(co)
+
+            else:
+                for chat in co.chats:
+                    if text in chat.text.lower():
+                        self.add_searched_objects(co)
+                        break
+        
+        for so in self.searched_objects: self.add_chat_object(so)
+
+        if not self.searched_objects: self.clear()

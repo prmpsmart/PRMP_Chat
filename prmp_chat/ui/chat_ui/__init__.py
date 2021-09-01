@@ -7,6 +7,7 @@ class ChatProfile(QFrame):
     def __init__(self, parent=None):
         QFrame.__init__(self, parent)
 
+        self.setMinimumWidth(300)
         self.setMaximumWidth(300)
         self.setStyleSheet('''
             QFrame {
@@ -23,15 +24,13 @@ class ChatProfile(QFrame):
 
         layout = SETUP_FRAME(obj=self, margins=[5, 0, 5, 5], space=5)
 
-        details, details_layout = SETUP_FRAME(layout, re_obj=1)
+        details_layout = SETUP_FRAME(layout)
 
         icon_frame, icon_layout = SETUP_FRAME(details_layout, re_obj=1, margins=[10, 5, 10, 0])
         icon_layout.setAlignment(Qt.AlignHCenter)
         r = 120
 
-        self.icon = IconButton(icon='chat_list/user-circle.svg', icon_size=r)
-        self.icon.setMinimumSize(r, r)
-        self.icon.setMaximumSize(r, r)
+        self.icon = IconButton(icon='chat_list/user-circle.svg', size=r)
         icon_layout.addWidget(self.icon)
 
         icon_frame.setMinimumHeight(r)
@@ -59,14 +58,10 @@ class ChatProfile(QFrame):
 
         layout.addWidget(media)
 
-        block = QPushButton()
-        block.setIcon(QIcon(':profile/message-circle-off.svg'))
-        block.setText('Block contact')
+        block = Icon2Button('profile/message-circle-off.svg', 'Block contact')
         layout.addWidget(block)
 
-        report = QPushButton()
-        report.setText('Report contact')
-        report.setIcon(QIcon(':profile/thumb-down.svg'))
+        report = Icon2Button('profile/thumb-down.svg', 'Report contact')
         layout.addWidget(report)
 
     def update_user(self, user):

@@ -58,7 +58,7 @@ class User(_User):
 
         for channel in self.channels.objects: channels[channel.id] = Tag(name=channel.name, icon=channel.icon, creator=channel.creator.id, admins=channel.admin_ids, users=channel.ids)
 
-        tag = Tag(name=self.name, users=users, groups=groups, channels=channels, id=self.id, icon=self.icon)
+        tag = Tag(name=self.name, users=users, groups=groups, channels=channels, id=self.id, icon=self.icon, ext=self.ext)
 
         return tag
     

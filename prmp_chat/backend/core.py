@@ -40,9 +40,11 @@ class CONSTANT(Mixin):
         self._NAME = name.upper()
         self.OBJECTS = {}
 
-        for obj in objects:
-            if isinstance(obj, str): obj = CONSTANT(obj)
-            self.OBJECTS[obj._NAME] = obj
+        for obj in objects: self.add(obj)
+    
+    def add(self, obj):
+        if isinstance(obj, str): obj = CONSTANT(obj)
+        self.OBJECTS[obj._NAME] = obj
     
     def __len__(self): return len(self.OBJECTS)
 
@@ -87,7 +89,7 @@ RESPONSE = CONSTANT('RESPONSE', ['SUCCESSFUL', 'FAILED', 'LOGIN_FAILED', 'SIMULT
 ID = CONSTANT('ID', ['USER_ID', 'GROUP_ID', 'CHANNEL_ID', 'CHAT_ID'])
 TYPE = CONSTANT('TYPE', ['ADMIN', 'USER', 'GROUP', 'CHANNEL'])
 ACTION = CONSTANT('ACTION', ['ADD', 'REMOVE', 'CREATE', 'DELETE', 'CHANGE', 'DATA', CHAT, 'START', 'END', STATUS, 'SIGNUP', 'LOGIN', 'LOGOUT', 'QUEUED'])
-TAG = CONSTANT('TAG', [ACTION, 'CHAT_COLOR', CHAT, RESPONSE, 'SENDER', 'RECIPIENT', 'SENDER_TYPE', ID, 'KEY', 'NAME', 'DATA', STATUS, 'DATE_TIME', 'LAST_SEEN', 'RESPONSE_TO', TYPE])
+TAG = CONSTANT('TAG', [ACTION, 'CHAT_COLOR', CHAT, RESPONSE, 'SENDER', 'RECIPIENT', 'SENDER_TYPE', ID, 'KEY', 'NAME', 'DATA', STATUS, 'DATE_TIME', 'LAST_SEEN', 'RESPONSE_TO', 'EXT', TYPE, 'TEXT'])
 
 def EXISTS(manager, obj) -> RESPONSE: return RESPONSE.EXIST if obj in manager else RESPONSE.EXTINCT
 # ----------------------------------------------------------
@@ -96,8 +98,13 @@ def EXISTS(manager, obj) -> RESPONSE: return RESPONSE.EXIST if obj in manager el
 # ----------------------------------------------------------
 class Tag(Mixin, dict):
     DELIMITER = b'<TAG>'
+    # upper() of kwargs is the default lookup
 
     def __init__(self, **kwargs) -> None:
+
+        for a, b in kwargs.items():
+            if isinstance(b, Base): kwargs[a] = b.id
+
         dict.__init__(self, **kwargs)
 
     def __str__(self): return f'{self.className}({self.kwargs})'
@@ -110,7 +117,7 @@ class Tag(Mixin, dict):
             if isinstance(v, CONSTANT): v = str(v)
             elif isinstance(v, QDateTime): v = DATETIME(v)
             elif isinstance(v, Tag): v = v.dict
-            elif isinstance(v, Base): v = v.id
+            # elif isinstance(v, Base): v = v.id
             _dict[k] = v
         return _dict
 
@@ -171,14 +178,25 @@ class Tag(Mixin, dict):
             tup = {}
             for at in attr:
                 t = self.get(str(at).upper()) or self.get(str(at).lower())
-                tup[at.upper()] = t
+                tup[at] = t
             return tup
         elif isinstance(attr, str): return self.get(attr.upper())
 
-    def __setattr__(self, attr, val): self[attr] = val
+    def __setattr__(self, attr, val): self[attr.upper()] = val
 
     def __getstate__(self): return self.__dict__
     def __setstate__(self, state): self.__dict__.update(state)
+
+    def get_date_time(self):
+        if isinstance(self.date_time, int): return DATETIME(self.date_time)
+        return self.date_time
+
+    def delete(self, attr):
+        dict = self.dict
+        if attr in dict: del dict[attr]
+        elif attr.upper() in dict: del dict[attr.upper()]
+        self.clear()
+        self.update(dict)
 # ----------------------------------------------------------
 
 
@@ -187,6 +205,7 @@ class Base(Mixin):
 
     def __init__(self, id: str, name: str='', icon: str=None, date_time: QDateTime=None):
         self.id = id
+        self.ext = ''
         self.icon = icon
         self.name = name
         self.date_time = date_time or QDateTime.currentDateTime()
@@ -195,6 +214,7 @@ class Base(Mixin):
         add = ''
         if self.name: add = f', name={self.name}'
         return f'{self.className}(id={self.id}%s)'%add
+
 
 class _User_Base(Base):
     
@@ -321,6 +341,8 @@ class _Manager:
             litu = []
             for na in name: litu.append(self[na])
             return litu
+        
+        else: return self.objects[:]
 
 # ----------------------------------------------------------
 

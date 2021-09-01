@@ -157,7 +157,7 @@ class Emoji_Frame(QFrame):
     def set_style(self, tup):
         self.setStyleSheet('background: %s' % tup)
 
-    
+
 class Emoji_Ui(QWidget):
 
     def __init__(self, parent=None):
@@ -251,14 +251,4 @@ class Emoji_Ui(QWidget):
         self._groups_[0].add(emoji)
         print(emoji)
         # print(self._groups_[0].emojis)
-
-
-
-
-
-
-
-
-
-
 

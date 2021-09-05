@@ -235,6 +235,7 @@ class ChatWidget(QFrame):
     
     resizeEvent = showEvent
 
+
 class ChatsList(ScrolledWidget):
 
     def __init__(self, tab, user, attr='contacts', callback=None):
@@ -279,6 +280,10 @@ class ChatsList(ScrolledWidget):
     def set_current_object(self, chat_object):
         widget = self._chats_objects_.get(chat_object)
         if widget: self.callback(widget, q=0)
+
+    def update_list(self):
+        for v in self._chats_objects_.values(): v.update_chat_widget()
+
 
 
 class SearchList(ChatsList):

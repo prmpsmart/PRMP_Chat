@@ -591,14 +591,17 @@ class ChatMessage(QFrame):
     def resizeEvent(self, event):
         self.setMaximumWidth(self.maxw)
 
+    def moveEvent(self, event):
+        self.update_()
+
 
 class ChatViewer(ScrolledWidget):
 
-    def __init__(self, client: User, chat_object):
+    def __init__(self, client: Client, chat_object):
         ScrolledWidget.__init__(self, space=4, margins=[0, 0, 7, 7])
 
         self.client = client
-        self.user = client.user
+        self.user: User = client.user
         self.chat_object = chat_object
         self._chats_ = []
         
@@ -633,10 +636,8 @@ class ChatViewer(ScrolledWidget):
         ''' % (STYLE.DARK))
 
     def add_message(self, message):
-        tag = Tag(text=message, action=CHAT, chat=CHAT.TEXT, sender=self.user.id, recipient=self.chat_object.id, date_time=DATETIME(num=0), type=self.chat_object.className)
-
-        self.user.add_chat(tag)
-
+        tag = self.client.send_chat_tag(Tag(text=message, action=CHAT, chat=CHAT.TEXT, sender=self.user.id, recipient=self.chat_object.id, date_time=DATETIME(num=0), type=self.chat_object.className))
+        
         self.add_tag(tag)
 
     def add_tag(self, tag):

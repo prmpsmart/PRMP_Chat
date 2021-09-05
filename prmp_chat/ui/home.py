@@ -247,12 +247,17 @@ class Backend_Hook:
     def __init__(self, user=None):
         self.user: User = user or LOAD()
         self.client = Client(user=self.user, relogin=1, LOG=self.logit)
+
+        self._recv_status = None
+        self._change_status = None
+
         self.user_hooks()
-        
+        self.client_hooks()
+    
         self.login_thread = Thread(self, self.login)
 
     def login(self):
-        if self.user: self.client.login(start=1)
+        if self.user: self.client.re_login(start=1)
 
     def logit(self, *args, **kwargs):
         # print(*args, **kwargs)
@@ -260,24 +265,29 @@ class Backend_Hook:
 
     def user_hooks(self):
        # status
-        self._user_change_status = self.user.change_status
-        self.user.change_status = self.status_hook
+        self._change_status = self.user.change_status
+        self.user.change_status = self.change_status
 
     def client_hooks(self):
-        self._send_tag = self.client.send_tag
-        self._recv_tag = self.client.recv_tag
+        self._recv_status = self.client.recv_status
+        self.client.recv_status = self.recv_status
 
-    def status_hook(self, status):
-        self._user_change_status(status)
+    def recv_status(self, tag):
+        self._recv_status(tag)
+        print(tag)
+        self.update_chatlists()
+
+    def change_status(self, status):
+        self._change_status(status)
         if status == STATUS.ONLINE: self.header.set_online()
         else: self.header.set_offline()
         self.side_bar.profile.update_details()
 
     def remove_user_hooks(self):
-        self.user.change_status = self._user_change_status
+        self.user.change_status = self._change_status
 
     def remove_client_hooks(self):
-        self.user.change_status = self._user_change_status
+        ...
 
     def remove_hooks(self):
         self.remove_user_hooks()
@@ -397,5 +407,8 @@ class Home(QFrame, Backend_Hook):
         widget.set_current_object(user)
         self.center_tab.setCurrentIndex(index)
 
-
+    def update_chatlists(self):
+        self.contact_frame.update_list()
+        self.group_frame.update_list()
+        self.channel_frame.update_list()
 

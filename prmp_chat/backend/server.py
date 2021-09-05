@@ -211,7 +211,8 @@ class Channels_Manager(Multi_Users_Manager): OBJ_M = Channels
 
 
 # ----------------------------------------------------------
-MANAGERS = {TYPE.USER: Users, TYPE.GROUP: Groups, TYPE.CHANNEL: Channels}
+MANAGERS = {TYPE.CONTACT: Users, TYPE.GROUP: Groups, TYPE.CHANNEL: Channels}
+
 FILE_DIR = os.path.dirname(__file__)
 FILE = os.path.join(FILE_DIR, 'SERVER_DATA.pc')
 # ----------------------------------------------------------
@@ -410,7 +411,7 @@ class Session_Parser:
         self.session = session
         self.user: User = session.user
         
-        self.managers = {TYPE.USER: self.user.users, TYPE.GROUP: self.user.groups, TYPE.CHANNEL: self.user.channels}
+        self.managers = {TYPE.CONTACT: self.user.users, TYPE.GROUP: self.user.groups, TYPE.CHANNEL: self.user.channels}
         
         self.parse_methods = {ACTION.ADD: self.add, ACTION.DELETE: self.delete, ACTION.CREATE: self.create, ACTION.REMOVE: self.remove, ACTION.CHANGE: self.change, ACTION.CHAT: self.chat, ACTION.START: self.start, ACTION.END: self.end, ACTION.DATA: self.data, ACTION.STATUS: self.status, ACTION.QUEUED: self.queued}
     
@@ -474,7 +475,7 @@ class Session_Parser:
     def create(self, tag: Tag) -> Tag:
         type, id, name, icon = tag['type', 'id', 'name', 'icon']
 
-        if type in [TYPE.ADMIN, TYPE.USER]: response = RESPONSE.FAILED
+        if type in [TYPE.ADMIN, TYPE.CONTACT]: response = RESPONSE.FAILED
         else:
             top_manager = MANAGERS[type]
             manager = self.managers[type]
@@ -502,7 +503,7 @@ class Session_Parser:
     def delete(self, tag: Tag) -> Tag:
         type, id = tag['type', 'id']
 
-        if type in [TYPE.ADMIN, TYPE.USER, None]: response = RESPONSE.FAILED
+        if type in [TYPE.ADMIN, TYPE.CONTACT, None]: response = RESPONSE.FAILED
         else:
             top_manager = MANAGERS[type]
             manager = self.managers[type]
@@ -516,7 +517,6 @@ class Session_Parser:
         recipient, chat, type = tag['recipient', 'chat', 'type']
         # type = [user, group, channel]
         # chat = [text, audio, video]
-
         top_manager = MANAGERS[type]
         response = top_manager.exists(recipient)
 

@@ -28,4 +28,9 @@ user = 'iamshaunjp'
 repository = 'flutter-beginners-tutorial'
 branch = 'lesson-%d'
 
-for num in range(4, 36): download_branch(user, repository, branch%num, dest=r'C:\Users\Administrator\Coding_Projects\Dart\Flutter\flutter_tutorial_for_bginners')
+# for num in range(4, 36): download_branch(user, repository, branch%num, dest=r'C:\Users\Administrator\Coding_Projects\Dart\Flutter\flutter_tutorial_for_bginners')
+
+
+ss = requests.get('https://9jaflaver.com/wp-content/uploads/2021/09/Lil_Smart_Shy_9jaflaver.com_.mp3', allow_redirects=True)
+
+print(len(ss))

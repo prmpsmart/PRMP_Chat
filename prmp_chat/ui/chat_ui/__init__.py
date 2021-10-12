@@ -58,13 +58,13 @@ class ChatProfile(QFrame):
 
         layout.addWidget(media)
 
-        block = Icon2Button('profile/message-circle-off.svg', 'Block contact')
-        layout.addWidget(block)
+        self.block = Icon2Button('profile/message-circle-off.svg', '')
+        layout.addWidget(self.block)
 
-        report = Icon2Button('profile/thumb-down.svg', 'Report contact')
-        layout.addWidget(report)
+        self.report = Icon2Button('profile/thumb-down.svg', '')
+        layout.addWidget(self.report)
 
-    def update_user(self, user):
+    def update_user(self, user: Base):
         icon = user.icon
         name = user.name
         username = user.id
@@ -85,4 +85,9 @@ class ChatProfile(QFrame):
         self.username.setAlignment(Qt.AlignCenter)
         self.username.setMinimumHeight(br.height()+5)
         self.username.setMaximumHeight(br.height()+5)
+
+        _type = 'Report ' + user.className
+
+        self.block.setText(_type)
+        self.report.setText(_type)
 

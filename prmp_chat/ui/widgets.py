@@ -21,8 +21,6 @@ class STYLE:
 
 HOME_STYLE = open(os.path.join(os.path.dirname(__file__), "resources/qss/normal.qss")).read()
 
-OFFLINE_FORMAT = 'OFFLINE | dd/MM/yy | HH:mm:ss'
-
 
 def GET_STYLE(): return HOME_STYLE % (
         STYLE.LIGHT_SHADE, STYLE.DARK_SHADE, # QWidget

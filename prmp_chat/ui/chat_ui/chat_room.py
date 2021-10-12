@@ -117,6 +117,8 @@ class ChatHeader(ChatRoomH_F):
         self.icon.setStyleSheet('text-align: center; background: %s'%STYLE.LIGHT_SHADE)
         self.icon.mouseReleaseEvent = lambda e: None
 
+        self.setToolTip('Double Click to Close')
+
 
         self.mouseDoubleClickEvent = close
 
@@ -671,15 +673,14 @@ class ChatRoom(QFrame):
         self.footer = ChatFooter(emoji, room=self.room)
         layout.addWidget(self.footer)
 
-    def resizeEvent(self, event): self.profile.update_user(self.chat_object)
-    
-    def update_(self):
+    def resizeEvent(self, event): 
         self.header.update_()
         self.room.update_()
+        self.profile.update_user(self.chat_object)
     
     def showEvent(self, event):
         self.send_back(self.chat_object)
-        self.profile.update_user(self.chat_object)
+        self.resizeEvent(event)
 
 
 class ChatTab(QTabWidget):

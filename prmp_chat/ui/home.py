@@ -61,7 +61,6 @@ class Profile(QFrame):
     # def resizeEvent(self, event):
 
 
-
 class SideBar(QFrame):
 
     def __init__(self, user, parent):
@@ -408,7 +407,7 @@ class Home(QFrame, Backend_Hook):
         self.center_tab.setCurrentIndex(index)
 
     def update_chatlists(self):
-        self.contact_frame.update_list()
-        self.group_frame.update_list()
-        self.channel_frame.update_list()
+        self.center_tab.currentWidget().update_statuses()
+        self.chat_tab.currentWidget().header.update_()
+
 

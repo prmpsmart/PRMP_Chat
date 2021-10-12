@@ -324,7 +324,8 @@ class Response_Server:
                 response = Users.create(*tag['id', 'name'], key=tag.key)
                 
                 LOG(response)
-                soc_resp = client.send_tag(Tag(response=response))
+                tag.response = response
+                soc_resp = client.send_tag(tag)
                 if soc_resp in SOCKET.ERRORS: return
                 
                 if response == RESPONSE.SUCCESSFUL: user = Users.OBJS[tag.id]
@@ -342,9 +343,8 @@ class Response_Server:
                         client.user = user
 
                     else: response = RESPONSE.FALSE_KEY
-                
-                # LOG(response)
-                soc_resp = client.send_tag(Tag(response=response))
+                tag.response = response
+                soc_resp = client.send_tag(tag)
                 if soc_resp in SOCKET.ERRORS: return soc_resp
 
                 if response == RESPONSE.SUCCESSFUL:

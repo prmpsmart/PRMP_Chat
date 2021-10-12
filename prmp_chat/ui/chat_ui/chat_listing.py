@@ -161,17 +161,16 @@ class ChatWidget(QFrame):
         self.leaveEvent(0)
         self.update_chat_widget()
     
-    def update_chat_widget(self):
+    def update_status(self):
         
-        self.name.setText(self.chat_object.name)
-
         if isinstance(self.chat_object, Contact):
             self.status_bubble.setStyleSheet(f'background: {"green" if self.chat_object.status == STATUS.ONLINE else "gray"}; border-radius: 5px; color: white')
             
             self.status_bubble.setToolTip(self.chat_object.status)
-        
-        self.icon.set_icon(self.chat_object.icon)
-        
+    
+    def update_details(self):
+        self.name.setText(self.chat_object.name)
+
         date_time = self.chat_object.last_time
         date = date_time.toString('dd/MM/yy')
         
@@ -185,13 +184,24 @@ class ChatWidget(QFrame):
         unread = str(self.chat_object.unread_chats)
         self.unread_bubble.setText(unread)
         self.ubr = self.ufm.boundingRect(unread)
-        
+
         last_chat = self.chat_object.last_chat
         if last_chat:
             last_text = last_chat.text
             if last_text:
                 if len(last_text) > 50: last_text = ''.join(last_text[:50])
                 self.last_info.setText(last_text + '...')
+
+    def update_icon(self):
+        self.icon.set_icon(self.chat_object.icon)
+
+    def update_chat_widget(self):
+        self.update_status()
+        self.update_details()
+        self.update_icon()
+
+        
+        
     
     def enterEvent(self, event):
         if not self.isCurrent: self.setStyleSheet(self._style % (STYLE.LIGHT, STYLE.DARK))
@@ -281,8 +291,11 @@ class ChatsList(ScrolledWidget):
         widget = self._chats_objects_.get(chat_object)
         if widget: self.callback(widget, q=0)
 
-    def update_list(self):
-        for v in self._chats_objects_.values(): v.update_chat_widget()
+    def update_subs(self, func: str):
+        for v in self._chats_objects_.values(): getattr(v, func)()
+    
+    def update_statuses(self): self.update_subs('update_status')
+
 
 
 

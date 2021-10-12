@@ -1,9 +1,10 @@
 # ----------------------------------------------------------
 import json, threading, socket, os, time
+from typing import List
 from PySide6.QtCore import QDateTime
 from prmp_lib.prmp_miscs.prmp_exts import PRMP_File
 # ----------------------------------------------------------
-
+OFFLINE_FORMAT = 'OFFLINE | dd/MM/yy | HH:mm:ss'
 
 # ----------------------------------------------------------
 def THREAD(func, *args, **kwargs): threading.Thread(target=func, args=args, kwargs=kwargs).start()
@@ -14,14 +15,15 @@ def DATETIME(date_time=None, num=1):
         if num: return DATETIME(date_time)
         else: return date_time
 
-    if isinstance(date_time, int): return QDateTime.fromSecsSinceEpoch(date_time)
+    if isinstance(date_time, int) and date_time > 0: return QDateTime.fromMSecsSinceEpoch(date_time)
 
-    else: return date_time.toSecsSinceEpoch()
+    else: return date_time.toMSecsSinceEpoch()
 
 def TIME(dateTime: QDateTime) -> str: return dateTime.toString("HH:mm:ss")
 
 def DATE(dateTime: QDateTime) -> str: return dateTime.toString("yyyy-MM-dd")
-# ----------------------------------------------------------
+
+def EXISTS(manager, obj): return RESPONSE.EXIST if obj in manager else RESPONSE.EXTINCT# ----------------------------------------------------------
 
 
 # ----------------------------------------------------------
@@ -79,19 +81,18 @@ class CONSTANT(Mixin):
         self.OBJECTS = {}
         for k in state['OBJECTS']: self.OBJECTS[k] = CONSTANT(k)
 
-SOCKET = CONSTANT('SOCKET', ['RESET', 'CLOSED', 'ALIVE'])
+SOCKET = CONSTANT('SOCKET', objects=['RESET', 'CLOSED', 'ALIVE'])
 SOCKET.ERRORS = SOCKET['RESET', 'CLOSED']
 
-CHAT = CONSTANT('CHAT', ['TEXT', 'AUDIO', 'IMAGE', 'VIDEO'])
-STATUS = CONSTANT('STATUS', ['ONLINE', 'OFFLINE', 'LAST_SEEN'])
+CHAT = CONSTANT('CHAT', objects=['TEXT', 'AUDIO', 'IMAGE', 'VIDEO'])
+STATUS = CONSTANT('STATUS', objects=['ONLINE', 'OFFLINE', 'LAST_SEEN'])
 
-RESPONSE = CONSTANT('RESPONSE', ['SUCCESSFUL', 'FAILED', 'LOGIN_FAILED', 'SIMULTANEOUS_LOGIN', 'EXIST', 'EXTINCT', 'FALSE_KEY'])
-ID = CONSTANT('ID', ['USER_ID', 'GROUP_ID', 'CHANNEL_ID', 'CHAT_ID'])
-TYPE = CONSTANT('TYPE', ['ADMIN', 'CONTACT', 'GROUP', 'CHANNEL'])
-ACTION = CONSTANT('ACTION', ['ADD', 'REMOVE', 'CREATE', 'DELETE', 'CHANGE', 'DATA', CHAT, 'START', 'END', STATUS, 'SIGNUP', 'LOGIN', 'LOGOUT', 'QUEUED'])
-TAG = CONSTANT('TAG', [ACTION, 'CHAT_COLOR', CHAT, RESPONSE, 'SENDER', 'RECIPIENT', 'SENDER_TYPE', ID, 'KEY', 'NAME', 'DATA', STATUS, 'DATE_TIME', 'LAST_SEEN', 'RESPONSE_TO', 'EXT', TYPE, 'TEXT'])
+RESPONSE = CONSTANT('RESPONSE', objects=['SUCCESSFUL', 'FAILED', 'LOGIN_FAILED', 'SIMULTANEOUS_LOGIN', 'EXIST', 'EXTINCT', 'FALSE_KEY'])
+ID = CONSTANT('ID', objects=['USER_ID', 'GROUP_ID', 'CHANNEL_ID', 'CHAT_ID'])
+TYPE = CONSTANT('TYPE', objects=['ADMIN', 'CONTACT', 'GROUP', 'CHANNEL'])
+ACTION = CONSTANT('ACTION', objects=['ADD', 'REMOVE', 'CREATE', 'DELETE', 'CHANGE', 'DATA', CHAT, 'START', 'END', STATUS, 'SIGNUP', 'LOGIN', 'LOGOUT', 'QUEUED'])
+TAG = CONSTANT('TAG', objects=[ACTION, 'CHAT_COLOR', CHAT, RESPONSE, 'SENDER', 'RECIPIENT', 'SENDER_TYPE', ID, 'KEY', 'NAME', 'DATA', STATUS, 'DATE_TIME', 'LAST_SEEN', 'RESPONSE_TO', 'EXT', TYPE, 'TEXT'])
 
-def EXISTS(manager, obj) -> RESPONSE: return RESPONSE.EXIST if obj in manager else RESPONSE.EXTINCT
 # ----------------------------------------------------------
 
 
@@ -205,15 +206,15 @@ class Base(Mixin):
 
     def __init__(self, id: str, name: str='', icon: str=None, date_time: QDateTime=None):
         self.id = id
-        self.ext = ''
-        self.icon = icon
         self.name = name
+        self.icon = icon
+        self.ext = ''
         self.date_time = date_time or QDateTime.currentDateTime()
     
     def __str__(self):
         add = ''
         if self.name: add = f', name={self.name}'
-        return f'{self.className}(id={self.id}%s)'%add
+        return f'{self.className}(id={self.id}{add})'
 
 
 class _User_Base(Base):
@@ -237,15 +238,15 @@ class _User_Base(Base):
 
     @property
     def str_last_seen(self) -> str:
-        if self.last_seen: return self.last_seen.toString("yyyy-MM-dd, HH:mm:ss")
+        if self.last_seen: return self.last_seen.toString(OFFLINE_FORMAT)
 
     def change_status(self, status) -> None:
         if status == STATUS.ONLINE: self._status = status
         else:
-            if status == STATUS.OFFLINE:
-                self._status = status
-                last_seen = None
+            last_seen = None
+            if status == STATUS.OFFLINE: self._status = status
             else:
+                # status is int from the server
                 self._status = STATUS.OFFLINE
                 last_seen = status
             self.last_seen = DATETIME(last_seen, num=0)
@@ -259,6 +260,7 @@ class _Multi_Users(Base):
         self._admins = {}
         self._users = {}
         self.last_time: QDateTime = None
+        self.chats = None
     
     def add_admin(self, admin_id: str):
         if admin_id in self._users: self._admins[admin_id] = self._users[admin_id]
@@ -288,7 +290,7 @@ class _Multi_Users(Base):
 class _User(_User_Base):
 
     def __init__(self, key: str='', **kwargs):
-        Base.__init__(self, **kwargs)
+        _User_Base.__init__(self, **kwargs)
         self.change_status(STATUS.OFFLINE)
 
         self.key = key
@@ -309,14 +311,14 @@ class _Manager:
         self._objects = {}
         self.get = self._objects.get
 
-    def add(self, obj: Base) -> None:
+    def add(self, obj: _User_Base) -> None:
         if obj.id == self.user.id: return
         
         _obj = self.get(obj.id)
         if _obj == None: self._objects[obj.id] = obj
 
     def remove(self, id: str) -> None:
-        obj: Base = self.get(id)
+        obj: _User_Base = self.get(id)
         if obj != None: del self._objects[id]
     
     def add_chat(self, chat: Tag) -> None:
@@ -407,7 +409,7 @@ class Sock(Mixin):
             return tag
         return self.catch(func)
 
-    def recv_tags(self) -> Tag: return self.recv_tag(many=True)
+    def recv_tags(self) -> List[Tag]: return self.recv_tag(many=True)
 
     def send_tag(self, tag: Tag) -> int: return self.catch(lambda: self.socket.send(tag.encode))
 

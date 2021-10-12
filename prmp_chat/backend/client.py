@@ -1,19 +1,19 @@
-# ----------------------------------------------------------
+# --------------------------------------------------------
 from .core import _Manager, _User_Base, _Multi_Users, _User
 from .core import *
 from prmp_lib.prmp_miscs.prmp_exts import PRMP_File
-# ----------------------------------------------------------
+# --------------------------------------------------------
 
 TYPE.add('CONTACT')
 
-# ----------------------------------------------------------
+# --------------------------------------------------------
 class Manager(_Manager):
     OBJ = None
     
     def add(self, tag: Tag) -> None:
-        if tag.id == self.user.id: return
-        obj = self.OBJ(self.user, tag)
-        super().add(obj)
+        if tag.id != self.user.id:
+            obj = self.OBJ(self.user, tag)
+            super().add(obj)
 
 
 class Chats:
@@ -34,7 +34,7 @@ class Chats:
         if self.chats: return self.chats[-1]
     
     def read(self): self.unread_chats = 0
-# ----------------------------------------------------------
+# --------------------------------------------------------
 
 
 class User_Base:
@@ -44,7 +44,7 @@ class User_Base:
         self.icon = file.base64Data
         self.ext = file.ext
 
-# ----------------------------------------------------------
+# --------------------------------------------------------
 
 class Contact(Chats, _User_Base, User_Base):
 
@@ -65,10 +65,10 @@ class Contacts_Manager(Manager):
         if id == self.user.id: id = chat.recipient
         obj = self.get(id)
         if obj != None: obj.add_chat(chat)
-# ----------------------------------------------------------
+# --------------------------------------------------------
 
 
-# ----------------------------------------------------------
+# --------------------------------------------------------
 class Multi_Users(Chats, _Multi_Users):
 
     def __init__(self, user, tag):
@@ -94,10 +94,10 @@ class Channel(Multi_Users): only_admin = True
 
 
 class Channels_Manager(Manager): OBJ = Channel
-# ----------------------------------------------------------
+# --------------------------------------------------------
 
 
-# ----------------------------------------------------------
+# --------------------------------------------------------
 class User(_User, User_Base):
 
     def __init__(self, **kwargs):
@@ -118,6 +118,7 @@ class User(_User, User_Base):
         self.ext = tag.ext
 
         data = dict(users=tag.users, groups=tag.groups, channels=tag.channels)
+        
         for name, objs in data.items():
             manager = getattr(self, name)
             for id, _dict in objs.items():
@@ -133,10 +134,10 @@ class User(_User, User_Base):
         else: return
 
         if tag.sender == self.id and not tag.sent: self.unsents.append(tag)
-# ----------------------------------------------------------
+# --------------------------------------------------------
 
 
-# ----------------------------------------------------------
+# --------------------------------------------------------
 class Socket(socket.socket, Sock):
 
     def __init__(self, *args, **kwargs):
@@ -160,12 +161,15 @@ class Client:
         self.relogin = relogin # try to relogin after connection failure
         self.LOG = LOG # a function or method to receive logs, defaults is print()
 
-    def create_socket(self):
-        self.socket = Socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.send_tag = self.socket.send_tag
-        self.recv_tag = self.socket.recv_tag
-        self.recv_tags = self.socket.recv_tags
-        self.sendall_tag = self.socket.sendall_tag
+    def create_socket(self): self.socket = Socket(socket.AF_INET, socket.SOCK_STREAM)
+    
+    def send_tag(self, tag): return self.socket.send_tag(tag)
+    
+    def recv_tag(self, *args, **kwargs): return self.socket.recv_tag(*args, **kwargs)
+    
+    def recv_tags(self): return self.socket.recv_tags()
+    
+    def sendall_tag(self, tag): return self.socket.sendall_tag(tag)
 
     def set_user(self, user): self.user = user
 
@@ -416,7 +420,7 @@ class Client:
     def recv_queued_tags(self):
         res = self.send_tag(Tag(action=ACTION.QUEUED))
         if isinstance(res, int): self.user.recv_tags = True
-# ----------------------------------------------------------
+# --------------------------------------------------------
 
 
 FILE_DIR = os.path.dirname(__file__)

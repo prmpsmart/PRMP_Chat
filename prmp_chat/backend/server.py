@@ -254,6 +254,7 @@ class Client_Socket(Sock):
 
     def __eq__(self, other): return str(self) == str(other)
 
+
 class Server(Mixin, socket.socket):
     'Server socket for creating server that waits for client connections.'
 
@@ -307,7 +308,7 @@ class Response_Server:
         self.LOG = server.LOG
 
     def add(self, client: Client_Socket) -> None:
-        # self.LOG(client, 'connected!')
+        self.LOG(client, 'connected!')
 
         while True:
             user = None
@@ -343,8 +344,10 @@ class Response_Server:
                         client.user = user
 
                     else: response = RESPONSE.FALSE_KEY
+                    
                 tag.response = response
                 soc_resp = client.send_tag(tag)
+
                 if soc_resp in SOCKET.ERRORS: return soc_resp
 
                 if response == RESPONSE.SUCCESSFUL:
@@ -377,6 +380,7 @@ class Session:
 
         while True:
             tags = self.client.recv_tags()
+            # print(tags)
 
             if tags in SOCKET.ERRORS:
                 self.stop_session()
@@ -436,16 +440,18 @@ class Session_Parser:
             return tag
     
     def queued(self, tag):
-        if self.user.queued_chats:
-            for chat in self.user.queued_chats:
+        print('sending queued chats')
+        queued = self.user.queued_chats.copy()
+        if queued:
+            for chat in queued:
                 res = self.client.send_tag(chat)
-                
                 if res in SOCKET.ERRORS:
-                    # means that client == offline
+                    # means that client is offline
                     self.stop_session()
                     return
+                self.user.queued_chats.remove(chat)
                 time.sleep(.1)
-            self.user.dispense()
+            # self.user.dispense()
     
     def add(self, tag: Tag) -> Tag:
         type, id = tag['type', 'id']
@@ -551,7 +557,7 @@ def server_test() -> None:
         n = nn + str(a)
         Users.create(id=n, name=n, key=n)
 
-    ade1 = Users.get('ade1')
+    ade1: User = Users.get('ade1')
     for a in ran:
         n = f'ade{a}'
         m = 'G_'+n
@@ -570,6 +576,11 @@ def server_test() -> None:
             u.add_user(j)
             c.add(j)
             g.add(j)
-    # Channels.get('c_ade2').add_admin('ade2')
+    Channels.get('c_ade2').add_admin('ade2')
+
+    user: User = None
+
+    for user in Users.OBJS:
+        if user != 'ade1': ade1.add_chat(Tag(sender=user, text='Text message!', recipient=ade1.id, action=ACTION.CHAT, type=CHAT.TEXT, date_time=DATETIME(num=0)))
 # ----------------------------------------------------------
 

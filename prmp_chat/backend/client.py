@@ -21,10 +21,10 @@ class Chats:
         self.user = user
         self.chats = []
         self.unread_chats = 0
-        self.last_time = QDateTime.currentDateTime()
+        self.last_time = DATETIME(num=0)
 
     def add_chat(self, tag):
-        self.last_time = tag.date_time or QDateTime.currentDateTime()
+        self.last_time = tag.date_time or DATETIME(num=0)
 
         if tag.sender != self.user.id: self.unread_chats += 1
         self.chats.append(tag)

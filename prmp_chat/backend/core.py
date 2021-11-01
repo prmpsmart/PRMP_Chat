@@ -8,13 +8,16 @@ from prmp_lib.prmp_miscs.prmp_exts import PRMP_File
 _DATETIME_ = 0
 try:
     from PySide6.QtCore import QDateTime as DateTime
+
+    OFFLINE_FORMAT = "OFFLINE | dd/MM/yyyy | HH:mm:ss"
 except:
     from prmp_lib.prmp_miscs.prmp_datetime import PRMP_DateTime as DateTime
-    _DATETIME_= 1
+
+    OFFLINE_FORMAT = "OFFLINE | %d/%m/%Y | %H:%M:%S"
+    _DATETIME_ = 1
 # ----------------------------------------------------------
 
 # ----------------------------------------------------------
-OFFLINE_FORMAT = "OFFLINE | dd/MM/yyyy | HH:mm:ss"
 
 # ----------------------------------------------------------
 def THREAD(func, *args, **kwargs):
@@ -30,18 +33,28 @@ def DATETIME(date_time=None, num=1):
             return date_time
 
     if isinstance(date_time, int) and date_time > 0:
-        return DateTime.fromtimestamp(date_time) if _DATETIME_ else DateTime.fromSecsSinceEpoch(date_time)
+        return (
+            DateTime.fromtimestamp(date_time)
+            if _DATETIME_
+            else DateTime.fromSecsSinceEpoch(date_time)
+        )
 
     else:
-        return int(date_time.timestamp()) if _DATETIME_ else date_time.toSecsSinceEpoch()
+        return (
+            int(date_time.timestamp()) if _DATETIME_ else date_time.toSecsSinceEpoch()
+        )
 
 
 def TIME(dateTime: DateTime) -> str:
-    return dateTime.strftime('%d/%m/%Y') if _DATETIME_ else dateTime.toString("dd/MM/yyyy")
+    return (
+        dateTime.strftime("%d/%m/%Y") if _DATETIME_ else dateTime.toString("dd/MM/yyyy")
+    )
 
 
 def DATE(dateTime: DateTime) -> str:
-    return dateTime.strftime('%H:%M:%S %p') if _DATETIME_ else dateTime.toString("HH:mm:ss")
+    return (
+        dateTime.strftime("%H:%M:%S") if _DATETIME_ else dateTime.toString("HH:mm:ss")
+    )
 
 
 def EXISTS(manager, obj):
@@ -323,7 +336,7 @@ class Base(Mixin):
         self.name = name
         self.icon = icon
         self.ext = ""
-        self.date_time = date_time or DateTime.currentDateTime()
+        self.date_time = date_time or DATETIME(num=0)
 
     def __str__(self):
         add = ""

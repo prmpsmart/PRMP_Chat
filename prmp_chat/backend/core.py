@@ -245,8 +245,9 @@ class Tag(Mixin, dict):
                 v = v.lower()
             elif k == TAG.DATE_TIME:
                 v = DATETIME(v)
-                
-            elif isinstance(v, dict): v = Tag(v)
+
+            elif isinstance(v, dict):
+                v = Tag(v)
 
             _kwargs[k] = v
             if isinstance(v, Base):

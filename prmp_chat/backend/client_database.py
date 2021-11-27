@@ -27,6 +27,7 @@ from .core import (
     CONSTANT as core_CONSTANT,
     Tag,
 )
+from .client import Manager
 
 
 class User_DB:
@@ -170,7 +171,7 @@ class User_DB:
             statement = UPDATE(
                 "user_details",
                 SET(*multi_values),
-                where=WHERE_EQUAL("id", User_DB.user_id, parenthesis=0, constant=1),
+                where=WHERE_EQUAL("id", User_DB.user_id),
             )
         else:
             statement = INSERT("user_details", values=VALUES(*values))
@@ -214,59 +215,33 @@ class User_DB:
         return result
 
     def save_objects(self, user):
-        contacts = user.contacts
-        contacts_datas = []
-        for contact in contacts.objects:
-            data = (
-                contact.id,
-                contact.name,
-                contact.icon,
-                contact.description,
-                "contact",
-                "",
-                0,
-            )
-            contacts_datas.append(data)
-
-        channels = user.channels
-        channels_datas = []
-        for channel in channels.objects:
-            data = (
-                channel.id,
-                channel.name,
-                channel.icon,
-                channel.description,
-                "channel",
-                channel.creator,
-                len(channel.users),
-            )
-            channels_datas.append(data)
-
-        groups = user.groups
-        groups_datas = []
-        for group in groups.objects:
-            data = (
-                group.id,
-                group.name,
-                group.icon,
-                group.description,
-                "group",
-                group.creator,
-                len(group.users),
-            )
-            groups_datas.append(data)
-
-        statement1 = INSERT("objects", values=MULTI_VALUES(*contacts_datas))
-        statement2 = INSERT("objects", values=MULTI_VALUES(*channels_datas))
-        statement3 = INSERT("objects", values=MULTI_VALUES(*groups_datas))
-
-        statements = statement1, statement2, statement3
-
-        for statement in statements:
-            self.db.exec(statement)
+        for type_ in ["contact", "channel", "group"]:
+            types = getattr(user, type_ + "s")
+            types_datas = []
+            for type in types.objects:
+                data = (
+                    type.id,
+                    type.name,
+                    type.icon,
+                    type.description,
+                    type_,
+                    getattr(user, "creator", ""),
+                    getattr(user, "objects", 0),
+                )
+                types_datas.append(data)
+            statement = INSERT("objects", values=MULTI_VALUES(*types_datas))
+            r = self.db.exec(statement, quiet=1)
+            print(r)
 
     def load_objects(self, user):
-        ...
+        for object_type in ["contact", "group", "channel"]:
+            statement = SELECT(
+                "*", "objects", where=WHERE_EQUAL("object_type", object_type)
+            )
+            results = self.db.exec(statement, quiet=1)
+            if isinstance(results, list):
+                manager: _Manager = getattr(user, object_type+'s')
+                print(manager, manager.OBJ)
 
     def add_chat(self, tag):
         columns_names = self.column_names(self.chats_columns)
@@ -317,11 +292,8 @@ class User_DB:
         self.db.commit()
 
     def load_chats(self, user):
-        NAME = lambda n: n.OBJ.__name__
 
-        contacts_chats_statement = SELECT(
-            "*", "chats", WHERE_EQUAL("type", NAME(user.contacts))
-        )
+        contacts_chats_statement = SELECT("*", "chats")
 
         results = self.db.exec(contacts_chats_statement, quiet=1)
 
@@ -333,7 +305,9 @@ class User_DB:
             dict_result["sent"] = bool(dict_result["sent"])
 
             chat_tag = Tag(**dict_result)
-            print(chat_tag)
+            sender, recipient = chat_tag["sender", "recipient"]
+
+            user.add_chat(chat_tag, saved=1)
 
     def load_members(self, user):
         ...

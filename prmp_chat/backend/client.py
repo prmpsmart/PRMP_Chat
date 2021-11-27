@@ -155,7 +155,7 @@ class User(_User, User_Base):
         self.user_db.save_user(self)
         self.recv_data = True
 
-    def add_chat(self, tag):
+    def add_chat(self, tag, saved=False):
         type = tag.type
         if type == TYPE.CONTACT:
             self.users.add_chat(tag)
@@ -168,7 +168,8 @@ class User(_User, User_Base):
 
         if tag.sender == self.id and not tag.sent:
             self.unsents.append(tag)
-        self.user_db.add_chat(tag)
+        if not saved:
+            self.user_db.add_chat(tag)
 
     def add_user(self, user):
         super().add_user(user)

@@ -1,5 +1,5 @@
 # ----------------------------------------------------------
-import json, threading, socket, os, time
+import json, threading, socket, os, time, hashlib
 from typing import List
 from prmp_lib.prmp_miscs.prmp_exts import PRMP_File
 
@@ -61,6 +61,33 @@ def EXISTS(manager, obj):
     return (
         RESPONSE.EXIST if obj in manager else RESPONSE.EXTINCT
     )  # ----------------------------------------------------------
+
+
+def ATTRS(object, attrs=[]):
+    dict = object.__dict__
+    res = []
+    for at in attrs:
+        res.append(dict.get(at))
+    return res
+
+
+def GENERATE_TAG_ID(tag):
+    if tag.id:
+        return
+
+    raw_id = tag["sender", "recipient", "date_time", "type", "chat"]
+    dt = raw_id[2]
+    if not isinstance(dt, int):
+        raw_id[2] = str(DATETIME(dt))
+
+    # everytime this function is called, this makes it give different id, no matter how identical the tag might be.
+    raw_id.append(str(DATETIME()))
+
+    id_byt = "|".join([str(a) for a in raw_id]).encode()
+    id = hashlib.sha224(id_byt).hexdigest()
+
+    tag.id = id
+    return id
 
 
 # ----------------------------------------------------------
@@ -288,17 +315,20 @@ class Tag(Mixin, dict):
         if isinstance(attr, tuple):
             tup = []
             for at in attr:
-                t = self[str(at).upper()] or self[str(at).lower()]
+                t = self[str(at)]
                 tup.append(t)
             return tup
         elif isinstance(attr, list):
             tup = {}
             for at in attr:
-                t = self.get(str(at).upper()) or self.get(str(at).lower())
+                t = self.get(str(at))
                 tup[at] = t
             return tup
         elif isinstance(attr, str):
-            return self.get(attr.upper())
+            res = self.get(attr.upper())
+            if res == None:
+                res = self.get(attr.lower())
+            return res
 
     def __setattr__(self, attr, val):
         self[attr.upper()] = val
@@ -324,17 +354,26 @@ class Tag(Mixin, dict):
         self.update(dict)
 
 
+EMPTY_TAG = Tag()
+EMPTY_TAGS = [EMPTY_TAG]
+
 # ----------------------------------------------------------
 
 
 # ----------------------------------------------------------
 class Base(Mixin):
     def __init__(
-        self, id: str, name: str = "", icon: str = None, date_time: DateTime = None
+        self,
+        id: str,
+        name: str = "",
+        icon: str = "",
+        date_time: DateTime = None,
+        description="",
     ):
         self.id = id
         self.name = name
         self.icon = icon
+        self.description = description
         self.ext = ""
         self.date_time = date_time or DATETIME(num=0)
 
@@ -515,7 +554,7 @@ class Sock(Mixin):
         # self.shutdown = self.socket.shutdown
 
     @property
-    def alive(self):
+    def _alive(self) -> bool:
         return self.state == SOCKET.ALIVE
 
     def _connect(self, ip, port):
@@ -547,13 +586,13 @@ class Sock(Mixin):
             self.state = SOCKET.ALIVE
             return result
 
-        except ConnectionResetError:
+        except ConnectionResetError as e:
             # An existing connection was forcibly closed by the remote client.
             # The terminal of the client socket was terminated.] or closed.
             self.state = SOCKET.RESET
             return SOCKET.RESET
 
-        except OSError:
+        except OSError as e:
             # An operation was attempted on something that is not a socket.
             # The client socket call close()
             self.state = SOCKET.CLOSED
@@ -564,8 +603,8 @@ class Sock(Mixin):
 
         def func():
             encoded = self.socket.recv(buffer)
-            if not encoded:
-                raise OSError
+            if encoded == b"":
+                return EMPTY_TAGS if many else EMPTY_TAG
             tag = fn(encoded)
             return tag
 
@@ -576,6 +615,11 @@ class Sock(Mixin):
 
     def send_tag(self, tag: Tag) -> int:
         return self.catch(lambda: self.socket.send(tag.encode))
+
+    @property
+    def alive(self) -> bool:
+        self.catch(lambda: self.socket.send(b""))
+        return self._alive
 
     def sendall_tag(self, tag: Tag) -> int:
         def func():

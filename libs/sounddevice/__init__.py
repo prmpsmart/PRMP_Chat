@@ -48,7 +48,7 @@ Online documentation:
     https://python-sounddevice.readthedocs.io/
 
 """
-__version__ = '0.4.1'
+__version__ = "0.4.1"
 
 import atexit as _atexit
 import os as _os
@@ -60,41 +60,40 @@ from ._sounddevice import ffi as _ffi
 
 try:
     for _libname in (
-            'portaudio',  # Default name on POSIX systems
-            'bin\\libportaudio-2.dll',  # DLL from conda-forge
-            'lib/libportaudio.dylib',  # dylib from anaconda
-            ):
+        "portaudio",  # Default name on POSIX systems
+        "bin\\libportaudio-2.dll",  # DLL from conda-forge
+        "lib/libportaudio.dylib",  # dylib from anaconda
+    ):
         _libname = _find_library(_libname)
         if _libname is not None:
             break
     else:
-        raise OSError('PortAudio library not found')
+        raise OSError("PortAudio library not found")
     _lib = _ffi.dlopen(_libname)
 except OSError:
-    if _platform.system() == 'Darwin':
-        _libname = 'libportaudio.dylib'
-    elif _platform.system() == 'Windows':
-        _libname = 'libportaudio' + _platform.architecture()[0] + '.dll'
+    if _platform.system() == "Darwin":
+        _libname = "libportaudio.dylib"
+    elif _platform.system() == "Windows":
+        _libname = "libportaudio" + _platform.architecture()[0] + ".dll"
     else:
         raise
     _libname = _os.path.join(_os.path.dirname(__file__), _libname)
     _lib = _ffi.dlopen(_libname)
 
 _sampleformats = {
-    'float32': _lib.paFloat32,
-    'int32': _lib.paInt32,
-    'int24': _lib.paInt24,
-    'int16': _lib.paInt16,
-    'int8': _lib.paInt8,
-    'uint8': _lib.paUInt8,
+    "float32": _lib.paFloat32,
+    "int32": _lib.paInt32,
+    "int24": _lib.paInt24,
+    "int16": _lib.paInt16,
+    "int8": _lib.paInt8,
+    "uint8": _lib.paUInt8,
 }
 
 _initialized = 0
 _last_callback = None
 
 
-def play(data, samplerate=None, mapping=None, blocking=False, loop=False,
-         **kwargs):
+def play(data, samplerate=None, mapping=None, blocking=False, loop=False, **kwargs):
     """Play back a NumPy array containing audio data.
 
     This is a convenience function for interactive use and for small
@@ -161,7 +160,7 @@ def play(data, samplerate=None, mapping=None, blocking=False, loop=False,
 
     """
     ctx = _CallbackContext(loop=loop)
-    ctx.frames = ctx.check_data(data, mapping, kwargs.get('device'))
+    ctx.frames = ctx.check_data(data, mapping, kwargs.get("device"))
 
     def callback(outdata, frames, time, status):
         assert len(outdata) == frames
@@ -169,14 +168,28 @@ def play(data, samplerate=None, mapping=None, blocking=False, loop=False,
         ctx.write_outdata(outdata)
         ctx.callback_exit()
 
-    ctx.start_stream(OutputStream, samplerate, ctx.output_channels,
-                     ctx.output_dtype, callback, blocking,
-                     prime_output_buffers_using_stream_callback=False,
-                     **kwargs)
+    ctx.start_stream(
+        OutputStream,
+        samplerate,
+        ctx.output_channels,
+        ctx.output_dtype,
+        callback,
+        blocking,
+        prime_output_buffers_using_stream_callback=False,
+        **kwargs
+    )
 
 
-def rec(frames=None, samplerate=None, channels=None, dtype=None,
-        out=None, mapping=None, blocking=False, **kwargs):
+def rec(
+    frames=None,
+    samplerate=None,
+    channels=None,
+    dtype=None,
+    out=None,
+    mapping=None,
+    blocking=False,
+    **kwargs
+):
     """Record audio data into a NumPy array.
 
     This is a convenience function for interactive use and for small
@@ -269,14 +282,29 @@ def rec(frames=None, samplerate=None, channels=None, dtype=None,
         ctx.read_indata(indata)
         ctx.callback_exit()
 
-    ctx.start_stream(InputStream, samplerate, ctx.input_channels,
-                     ctx.input_dtype, callback, blocking, **kwargs)
+    ctx.start_stream(
+        InputStream,
+        samplerate,
+        ctx.input_channels,
+        ctx.input_dtype,
+        callback,
+        blocking,
+        **kwargs
+    )
     return out
 
 
-def playrec(data, samplerate=None, channels=None, dtype=None,
-            out=None, input_mapping=None, output_mapping=None, blocking=False,
-            **kwargs):
+def playrec(
+    data,
+    samplerate=None,
+    channels=None,
+    dtype=None,
+    out=None,
+    input_mapping=None,
+    output_mapping=None,
+    blocking=False,
+    **kwargs
+):
     """Simultaneous playback and recording of NumPy arrays.
 
     This function does the following steps internally:
@@ -345,13 +373,14 @@ def playrec(data, samplerate=None, channels=None, dtype=None,
 
     """
     ctx = _CallbackContext()
-    output_frames = ctx.check_data(data, output_mapping, kwargs.get('device'))
+    output_frames = ctx.check_data(data, output_mapping, kwargs.get("device"))
     if dtype is None:
         dtype = ctx.data.dtype  # ignore module defaults
-    out, input_frames = ctx.check_out(out, output_frames, channels, dtype,
-                                      input_mapping)
+    out, input_frames = ctx.check_out(
+        out, output_frames, channels, dtype, input_mapping
+    )
     if input_frames != output_frames:
-        raise ValueError('len(data) != len(out)')
+        raise ValueError("len(data) != len(out)")
     ctx.frames = input_frames
 
     def callback(indata, outdata, frames, time, status):
@@ -361,12 +390,16 @@ def playrec(data, samplerate=None, channels=None, dtype=None,
         ctx.write_outdata(outdata)
         ctx.callback_exit()
 
-    ctx.start_stream(Stream, samplerate,
-                     (ctx.input_channels, ctx.output_channels),
-                     (ctx.input_dtype, ctx.output_dtype),
-                     callback, blocking,
-                     prime_output_buffers_using_stream_callback=False,
-                     **kwargs)
+    ctx.start_stream(
+        Stream,
+        samplerate,
+        (ctx.input_channels, ctx.output_channels),
+        (ctx.input_dtype, ctx.output_dtype),
+        callback,
+        blocking,
+        prime_output_buffers_using_stream_callback=False,
+        **kwargs
+    )
     return out
 
 
@@ -422,7 +455,7 @@ def get_status():
     if _last_callback:
         return _last_callback.status
     else:
-        raise RuntimeError('play()/rec()/playrec() was not called yet')
+        raise RuntimeError("play()/rec()/playrec() was not called yet")
 
 
 def get_stream():
@@ -442,7 +475,7 @@ def get_stream():
     if _last_callback:
         return _last_callback.stream
     else:
-        raise RuntimeError('play()/rec()/playrec() was not called yet')
+        raise RuntimeError("play()/rec()/playrec() was not called yet")
 
 
 def query_devices(device=None, kind=None):
@@ -551,15 +584,16 @@ def query_devices(device=None, kind=None):
       4 Built-in Digital Output, Core Audio (0 in, 2 out)
 
     """
-    if kind not in ('input', 'output', None):
-        raise ValueError('Invalid kind: {!r}'.format(kind))
+    if kind not in ("input", "output", None):
+        raise ValueError("Invalid kind: {!r}".format(kind))
     if device is None and kind is None:
-        return DeviceList(query_devices(i)
-                          for i in range(_check(_lib.Pa_GetDeviceCount())))
+        return DeviceList(
+            query_devices(i) for i in range(_check(_lib.Pa_GetDeviceCount()))
+        )
     device = _get_device_id(device, kind, raise_on_error=True)
     info = _lib.Pa_GetDeviceInfo(device)
     if not info:
-        raise PortAudioError('Error querying device {}'.format(device))
+        raise PortAudioError("Error querying device {}".format(device))
     assert info.structVersion == 2
     name_bytes = _ffi.string(info.name)
     try:
@@ -568,28 +602,28 @@ def query_devices(device=None, kind=None):
         # likely raises an exception on 'mbcs' data than vice versa, see also
         # https://github.com/spatialaudio/python-sounddevice/issues/72.
         # All other host APIs use 'utf-8' anyway.
-        name = name_bytes.decode('utf-8')
+        name = name_bytes.decode("utf-8")
     except UnicodeDecodeError:
         if info.hostApi in (
-                _lib.Pa_HostApiTypeIdToHostApiIndex(_lib.paDirectSound),
-                _lib.Pa_HostApiTypeIdToHostApiIndex(_lib.paMME)):
-            name = name_bytes.decode('mbcs')
+            _lib.Pa_HostApiTypeIdToHostApiIndex(_lib.paDirectSound),
+            _lib.Pa_HostApiTypeIdToHostApiIndex(_lib.paMME),
+        ):
+            name = name_bytes.decode("mbcs")
         else:
             raise
     device_dict = {
-        'name': name,
-        'hostapi': info.hostApi,
-        'max_input_channels': info.maxInputChannels,
-        'max_output_channels': info.maxOutputChannels,
-        'default_low_input_latency': info.defaultLowInputLatency,
-        'default_low_output_latency': info.defaultLowOutputLatency,
-        'default_high_input_latency': info.defaultHighInputLatency,
-        'default_high_output_latency': info.defaultHighOutputLatency,
-        'default_samplerate': info.defaultSampleRate,
+        "name": name,
+        "hostapi": info.hostApi,
+        "max_input_channels": info.maxInputChannels,
+        "max_output_channels": info.maxOutputChannels,
+        "default_low_input_latency": info.defaultLowInputLatency,
+        "default_low_output_latency": info.defaultLowOutputLatency,
+        "default_high_input_latency": info.defaultHighInputLatency,
+        "default_high_output_latency": info.defaultHighOutputLatency,
+        "default_samplerate": info.defaultSampleRate,
     }
-    if kind and device_dict['max_' + kind + '_channels'] < 1:
-        raise ValueError(
-            'Not an {} device: {!r}'.format(kind, device_dict['name']))
+    if kind and device_dict["max_" + kind + "_channels"] < 1:
+        raise ValueError("Not an {} device: {!r}".format(kind, device_dict["name"]))
     return device_dict
 
 
@@ -631,23 +665,27 @@ def query_hostapis(index=None):
 
     """
     if index is None:
-        return tuple(query_hostapis(i)
-                     for i in range(_check(_lib.Pa_GetHostApiCount())))
+        return tuple(
+            query_hostapis(i) for i in range(_check(_lib.Pa_GetHostApiCount()))
+        )
     info = _lib.Pa_GetHostApiInfo(index)
     if not info:
-        raise PortAudioError('Error querying host API {}'.format(index))
+        raise PortAudioError("Error querying host API {}".format(index))
     assert info.structVersion == 1
     return {
-        'name': _ffi.string(info.name).decode(),
-        'devices': [_lib.Pa_HostApiDeviceIndexToDeviceIndex(index, i)
-                    for i in range(info.deviceCount)],
-        'default_input_device': info.defaultInputDevice,
-        'default_output_device': info.defaultOutputDevice,
+        "name": _ffi.string(info.name).decode(),
+        "devices": [
+            _lib.Pa_HostApiDeviceIndexToDeviceIndex(index, i)
+            for i in range(info.deviceCount)
+        ],
+        "default_input_device": info.defaultInputDevice,
+        "default_output_device": info.defaultOutputDevice,
     }
 
 
-def check_input_settings(device=None, channels=None, dtype=None,
-                         extra_settings=None, samplerate=None):
+def check_input_settings(
+    device=None, channels=None, dtype=None, extra_settings=None, samplerate=None
+):
     """Check if given input device settings are supported.
 
     All parameters are optional, `default` settings are used for any
@@ -670,13 +708,20 @@ def check_input_settings(device=None, channels=None, dtype=None,
 
     """
     parameters, dtype, samplesize, samplerate = _get_stream_parameters(
-        'input', device=device, channels=channels, dtype=dtype, latency=None,
-        extra_settings=extra_settings, samplerate=samplerate)
+        "input",
+        device=device,
+        channels=channels,
+        dtype=dtype,
+        latency=None,
+        extra_settings=extra_settings,
+        samplerate=samplerate,
+    )
     _check(_lib.Pa_IsFormatSupported(parameters, _ffi.NULL, samplerate))
 
 
-def check_output_settings(device=None, channels=None, dtype=None,
-                          extra_settings=None, samplerate=None):
+def check_output_settings(
+    device=None, channels=None, dtype=None, extra_settings=None, samplerate=None
+):
     """Check if given output device settings are supported.
 
     Same as `check_input_settings()`, just for output device
@@ -684,8 +729,14 @@ def check_output_settings(device=None, channels=None, dtype=None,
 
     """
     parameters, dtype, samplesize, samplerate = _get_stream_parameters(
-        'output', device=device, channels=channels, dtype=dtype, latency=None,
-        extra_settings=extra_settings, samplerate=samplerate)
+        "output",
+        device=device,
+        channels=channels,
+        dtype=dtype,
+        latency=None,
+        extra_settings=extra_settings,
+        samplerate=samplerate,
+    )
     _check(_lib.Pa_IsFormatSupported(_ffi.NULL, parameters, samplerate))
 
 
@@ -714,12 +765,25 @@ def get_portaudio_version():
 class _StreamBase(object):
     """Direct or indirect base class for all stream classes."""
 
-    def __init__(self, kind, samplerate=None, blocksize=None, device=None,
-                 channels=None, dtype=None, latency=None, extra_settings=None,
-                 callback=None, finished_callback=None, clip_off=None,
-                 dither_off=None, never_drop_input=None,
-                 prime_output_buffers_using_stream_callback=None,
-                 userdata=None, wrap_callback=None):
+    def __init__(
+        self,
+        kind,
+        samplerate=None,
+        blocksize=None,
+        device=None,
+        channels=None,
+        dtype=None,
+        latency=None,
+        extra_settings=None,
+        callback=None,
+        finished_callback=None,
+        clip_off=None,
+        dither_off=None,
+        never_drop_input=None,
+        prime_output_buffers_using_stream_callback=None,
+        userdata=None,
+        wrap_callback=None,
+    ):
         """Base class for PortAudio streams.
 
         This class should only be used by library authors who want to
@@ -759,8 +823,8 @@ class _StreamBase(object):
         https://github.com/spatialaudio/python-rtmixer.
 
         """
-        assert kind in ('input', 'output', 'duplex')
-        assert wrap_callback in ('array', 'buffer', None)
+        assert kind in ("input", "output", "duplex")
+        assert wrap_callback in ("array", "buffer", None)
         if blocksize is None:
             blocksize = default.blocksize
         if clip_off is None:
@@ -770,8 +834,9 @@ class _StreamBase(object):
         if never_drop_input is None:
             never_drop_input = default.never_drop_input
         if prime_output_buffers_using_stream_callback is None:
-            prime_output_buffers_using_stream_callback = \
+            prime_output_buffers_using_stream_callback = (
                 default.prime_output_buffers_using_stream_callback
+            )
 
         stream_flags = _lib.paNoFlag
         if clip_off:
@@ -783,77 +848,87 @@ class _StreamBase(object):
         if prime_output_buffers_using_stream_callback:
             stream_flags |= _lib.paPrimeOutputBuffersUsingStreamCallback
 
-        if kind == 'duplex':
+        if kind == "duplex":
             idevice, odevice = _split(device)
             ichannels, ochannels = _split(channels)
             idtype, odtype = _split(dtype)
             ilatency, olatency = _split(latency)
             iextra, oextra = _split(extra_settings)
             iparameters, idtype, isize, isamplerate = _get_stream_parameters(
-                'input', idevice, ichannels, idtype, ilatency, iextra,
-                samplerate)
+                "input", idevice, ichannels, idtype, ilatency, iextra, samplerate
+            )
             oparameters, odtype, osize, osamplerate = _get_stream_parameters(
-                'output', odevice, ochannels, odtype, olatency, oextra,
-                samplerate)
+                "output", odevice, ochannels, odtype, olatency, oextra, samplerate
+            )
             self._dtype = idtype, odtype
             self._device = iparameters.device, oparameters.device
             self._channels = iparameters.channelCount, oparameters.channelCount
             self._samplesize = isize, osize
             if isamplerate != osamplerate:
                 raise ValueError(
-                    'Input and output device must have the same samplerate')
+                    "Input and output device must have the same samplerate"
+                )
             else:
                 samplerate = isamplerate
         else:
-            parameters, self._dtype, self._samplesize, samplerate = \
-                _get_stream_parameters(kind, device, channels, dtype, latency,
-                                       extra_settings, samplerate)
+            (
+                parameters,
+                self._dtype,
+                self._samplesize,
+                samplerate,
+            ) = _get_stream_parameters(
+                kind, device, channels, dtype, latency, extra_settings, samplerate
+            )
             self._device = parameters.device
             self._channels = parameters.channelCount
-            if kind == 'input':
+            if kind == "input":
                 iparameters = parameters
                 oparameters = _ffi.NULL
-            elif kind == 'output':
+            elif kind == "output":
                 iparameters = _ffi.NULL
                 oparameters = parameters
 
-        ffi_callback = _ffi.callback('PaStreamCallback', error=_lib.paAbort)
+        ffi_callback = _ffi.callback("PaStreamCallback", error=_lib.paAbort)
 
         if callback is None:
             callback_ptr = _ffi.NULL
-        elif kind == 'input' and wrap_callback == 'buffer':
+        elif kind == "input" and wrap_callback == "buffer":
 
             @ffi_callback
             def callback_ptr(iptr, optr, frames, time, status, _):
                 data = _buffer(iptr, frames, self._channels, self._samplesize)
                 return _wrap_callback(callback, data, frames, time, status)
 
-        elif kind == 'input' and wrap_callback == 'array':
+        elif kind == "input" and wrap_callback == "array":
 
             @ffi_callback
             def callback_ptr(iptr, optr, frames, time, status, _):
                 data = _array(
                     _buffer(iptr, frames, self._channels, self._samplesize),
-                    self._channels, self._dtype)
+                    self._channels,
+                    self._dtype,
+                )
                 return _wrap_callback(callback, data, frames, time, status)
 
-        elif kind == 'output' and wrap_callback == 'buffer':
+        elif kind == "output" and wrap_callback == "buffer":
 
             @ffi_callback
             def callback_ptr(iptr, optr, frames, time, status, _):
                 data = _buffer(optr, frames, self._channels, self._samplesize)
                 return _wrap_callback(callback, data, frames, time, status)
 
-        elif kind == 'output' and wrap_callback == 'array':
+        elif kind == "output" and wrap_callback == "array":
 
             @ffi_callback
             def callback_ptr(iptr, optr, frames, time, status, _):
                 data = _array(
                     _buffer(optr, frames, self._channels, self._samplesize),
-                    self._channels, self._dtype)
+                    self._channels,
+                    self._dtype,
+                )
                 return _wrap_callback(callback, data, frames, time, status)
 
-        elif kind == 'duplex' and wrap_callback == 'buffer':
+        elif kind == "duplex" and wrap_callback == "buffer":
 
             @ffi_callback
             def callback_ptr(iptr, optr, frames, time, status, _):
@@ -861,36 +936,45 @@ class _StreamBase(object):
                 isize, osize = self._samplesize
                 idata = _buffer(iptr, frames, ichannels, isize)
                 odata = _buffer(optr, frames, ochannels, osize)
-                return _wrap_callback(
-                    callback, idata, odata, frames, time, status)
+                return _wrap_callback(callback, idata, odata, frames, time, status)
 
-        elif kind == 'duplex' and wrap_callback == 'array':
+        elif kind == "duplex" and wrap_callback == "array":
 
             @ffi_callback
             def callback_ptr(iptr, optr, frames, time, status, _):
                 ichannels, ochannels = self._channels
                 idtype, odtype = self._dtype
                 isize, osize = self._samplesize
-                idata = _array(_buffer(iptr, frames, ichannels, isize),
-                               ichannels, idtype)
-                odata = _array(_buffer(optr, frames, ochannels, osize),
-                               ochannels, odtype)
-                return _wrap_callback(
-                    callback, idata, odata, frames, time, status)
+                idata = _array(
+                    _buffer(iptr, frames, ichannels, isize), ichannels, idtype
+                )
+                odata = _array(
+                    _buffer(optr, frames, ochannels, osize), ochannels, odtype
+                )
+                return _wrap_callback(callback, idata, odata, frames, time, status)
 
         else:
             # Use cast() to allow CData from different FFI instance:
-            callback_ptr = _ffi.cast('PaStreamCallback*', callback)
+            callback_ptr = _ffi.cast("PaStreamCallback*", callback)
 
         # CFFI callback object must be kept alive during stream lifetime:
         self._callback = callback_ptr
         if userdata is None:
             userdata = _ffi.NULL
-        self._ptr = _ffi.new('PaStream**')
-        _check(_lib.Pa_OpenStream(self._ptr, iparameters, oparameters,
-                                  samplerate, blocksize, stream_flags,
-                                  callback_ptr, userdata),
-               'Error opening {}'.format(self.__class__.__name__))
+        self._ptr = _ffi.new("PaStream**")
+        _check(
+            _lib.Pa_OpenStream(
+                self._ptr,
+                iparameters,
+                oparameters,
+                samplerate,
+                blocksize,
+                stream_flags,
+                callback_ptr,
+                userdata,
+            ),
+            "Error opening {}".format(self.__class__.__name__),
+        )
 
         # dereference PaStream** --> PaStream*
         self._ptr = self._ptr[0]
@@ -898,7 +982,7 @@ class _StreamBase(object):
         self._blocksize = blocksize
         info = _lib.Pa_GetStreamInfo(self._ptr)
         if not info:
-            raise PortAudioError('Could not obtain stream info')
+            raise PortAudioError("Could not obtain stream info")
         # TODO: assert info.structVersion == 1
         self._samplerate = info.sampleRate
         if not oparameters:
@@ -918,9 +1002,11 @@ class _StreamBase(object):
 
                 # CFFI callback object is kept alive during stream lifetime:
                 self._finished_callback = _ffi.callback(
-                    'PaStreamFinishedCallback', finished_callback_wrapper)
-            _check(_lib.Pa_SetStreamFinishedCallback(self._ptr,
-                                                     self._finished_callback))
+                    "PaStreamFinishedCallback", finished_callback_wrapper
+                )
+            _check(
+                _lib.Pa_SetStreamFinishedCallback(self._ptr, self._finished_callback)
+            )
 
     # Avoid confusion if something goes wrong before assigning self._ptr:
     _ptr = _ffi.NULL
@@ -1056,7 +1142,7 @@ class _StreamBase(object):
         """
         time = _lib.Pa_GetStreamTime(self._ptr)
         if not time:
-            raise PortAudioError('Error getting stream time')
+            raise PortAudioError("Error getting stream time")
         return time
 
     @property
@@ -1102,7 +1188,7 @@ class _StreamBase(object):
         """
         err = _lib.Pa_StartStream(self._ptr)
         if err != _lib.paStreamIsNotStopped:
-            _check(err, 'Error starting stream')
+            _check(err, "Error starting stream")
 
     def stop(self, ignore_errors=True):
         """Terminate audio processing.
@@ -1117,7 +1203,7 @@ class _StreamBase(object):
         """
         err = _lib.Pa_StopStream(self._ptr)
         if not ignore_errors:
-            _check(err, 'Error stopping stream')
+            _check(err, "Error stopping stream")
 
     def abort(self, ignore_errors=True):
         """Terminate audio processing immediately.
@@ -1131,7 +1217,7 @@ class _StreamBase(object):
         """
         err = _lib.Pa_AbortStream(self._ptr)
         if not ignore_errors:
-            _check(err, 'Error aborting stream')
+            _check(err, "Error aborting stream")
 
     def close(self, ignore_errors=True):
         """Close the stream.
@@ -1143,17 +1229,28 @@ class _StreamBase(object):
         err = _lib.Pa_CloseStream(self._ptr)
         self._ptr = _ffi.NULL
         if not ignore_errors:
-            _check(err, 'Error closing stream')
+            _check(err, "Error closing stream")
 
 
 class RawInputStream(_StreamBase):
     """Raw stream for recording only.  See __init__() and RawStream."""
 
-    def __init__(self, samplerate=None, blocksize=None,
-                 device=None, channels=None, dtype=None, latency=None,
-                 extra_settings=None, callback=None, finished_callback=None,
-                 clip_off=None, dither_off=None, never_drop_input=None,
-                 prime_output_buffers_using_stream_callback=None):
+    def __init__(
+        self,
+        samplerate=None,
+        blocksize=None,
+        device=None,
+        channels=None,
+        dtype=None,
+        latency=None,
+        extra_settings=None,
+        callback=None,
+        finished_callback=None,
+        clip_off=None,
+        dither_off=None,
+        never_drop_input=None,
+        prime_output_buffers_using_stream_callback=None,
+    ):
         """PortAudio input stream (using buffer objects).
 
         This is the same as `InputStream`, except that the *callback*
@@ -1181,8 +1278,9 @@ class RawInputStream(_StreamBase):
         RawStream, Stream
 
         """
-        _StreamBase.__init__(self, kind='input', wrap_callback='buffer',
-                             **_remove_self(locals()))
+        _StreamBase.__init__(
+            self, kind="input", wrap_callback="buffer", **_remove_self(locals())
+        )
 
     @property
     def read_available(self):
@@ -1220,7 +1318,7 @@ class RawInputStream(_StreamBase):
         """
         channels, _ = _split(self._channels)
         samplesize, _ = _split(self._samplesize)
-        data = _ffi.new('signed char[]', channels * samplesize * frames)
+        data = _ffi.new("signed char[]", channels * samplesize * frames)
         err = _lib.Pa_ReadStream(self._ptr, data, frames)
         if err == _lib.paInputOverflowed:
             overflowed = True
@@ -1233,11 +1331,22 @@ class RawInputStream(_StreamBase):
 class RawOutputStream(_StreamBase):
     """Raw stream for playback only.  See __init__() and RawStream."""
 
-    def __init__(self, samplerate=None, blocksize=None,
-                 device=None, channels=None, dtype=None, latency=None,
-                 extra_settings=None, callback=None, finished_callback=None,
-                 clip_off=None, dither_off=None, never_drop_input=None,
-                 prime_output_buffers_using_stream_callback=None):
+    def __init__(
+        self,
+        samplerate=None,
+        blocksize=None,
+        device=None,
+        channels=None,
+        dtype=None,
+        latency=None,
+        extra_settings=None,
+        callback=None,
+        finished_callback=None,
+        clip_off=None,
+        dither_off=None,
+        never_drop_input=None,
+        prime_output_buffers_using_stream_callback=None,
+    ):
         """PortAudio output stream (using buffer objects).
 
         This is the same as `OutputStream`, except that the *callback*
@@ -1265,8 +1374,9 @@ class RawOutputStream(_StreamBase):
         RawStream, Stream
 
         """
-        _StreamBase.__init__(self, kind='output', wrap_callback='buffer',
-                             **_remove_self(locals()))
+        _StreamBase.__init__(
+            self, kind="output", wrap_callback="buffer", **_remove_self(locals())
+        )
 
     @property
     def write_available(self):
@@ -1312,10 +1422,10 @@ class RawOutputStream(_StreamBase):
         _, channels = _split(self._channels)
         samples, remainder = divmod(len(data), samplesize)
         if remainder:
-            raise ValueError('len(data) not divisible by samplesize')
+            raise ValueError("len(data) not divisible by samplesize")
         frames, remainder = divmod(samples, channels)
         if remainder:
-            raise ValueError('Number of samples not divisible by channels')
+            raise ValueError("Number of samples not divisible by channels")
         err = _lib.Pa_WriteStream(self._ptr, data, frames)
         if err == _lib.paOutputUnderflowed:
             underflowed = True
@@ -1328,11 +1438,22 @@ class RawOutputStream(_StreamBase):
 class RawStream(RawInputStream, RawOutputStream):
     """Raw stream for playback and recording.  See __init__()."""
 
-    def __init__(self, samplerate=None, blocksize=None,
-                 device=None, channels=None, dtype=None, latency=None,
-                 extra_settings=None, callback=None, finished_callback=None,
-                 clip_off=None, dither_off=None, never_drop_input=None,
-                 prime_output_buffers_using_stream_callback=None):
+    def __init__(
+        self,
+        samplerate=None,
+        blocksize=None,
+        device=None,
+        channels=None,
+        dtype=None,
+        latency=None,
+        extra_settings=None,
+        callback=None,
+        finished_callback=None,
+        clip_off=None,
+        dither_off=None,
+        never_drop_input=None,
+        prime_output_buffers_using_stream_callback=None,
+    ):
         """PortAudio input/output stream (using buffer objects).
 
         This is the same as `Stream`, except that the *callback*
@@ -1373,18 +1494,30 @@ class RawStream(RawInputStream, RawOutputStream):
         RawInputStream, RawOutputStream, Stream
 
         """
-        _StreamBase.__init__(self, kind='duplex', wrap_callback='buffer',
-                             **_remove_self(locals()))
+        _StreamBase.__init__(
+            self, kind="duplex", wrap_callback="buffer", **_remove_self(locals())
+        )
 
 
 class InputStream(RawInputStream):
     """Stream for input only.  See __init__() and Stream."""
 
-    def __init__(self, samplerate=None, blocksize=None,
-                 device=None, channels=None, dtype=None, latency=None,
-                 extra_settings=None, callback=None, finished_callback=None,
-                 clip_off=None, dither_off=None, never_drop_input=None,
-                 prime_output_buffers_using_stream_callback=None):
+    def __init__(
+        self,
+        samplerate=None,
+        blocksize=None,
+        device=None,
+        channels=None,
+        dtype=None,
+        latency=None,
+        extra_settings=None,
+        callback=None,
+        finished_callback=None,
+        clip_off=None,
+        dither_off=None,
+        never_drop_input=None,
+        prime_output_buffers_using_stream_callback=None,
+    ):
         """PortAudio input stream (using NumPy).
 
         This has the same methods and attributes as `Stream`, except
@@ -1410,8 +1543,9 @@ class InputStream(RawInputStream):
         Stream, RawInputStream
 
         """
-        _StreamBase.__init__(self, kind='input', wrap_callback='array',
-                             **_remove_self(locals()))
+        _StreamBase.__init__(
+            self, kind="input", wrap_callback="array", **_remove_self(locals())
+        )
 
     def read(self, frames):
         """Read samples from the stream into a NumPy array.
@@ -1453,11 +1587,22 @@ class InputStream(RawInputStream):
 class OutputStream(RawOutputStream):
     """Stream for output only.  See __init__() and Stream."""
 
-    def __init__(self, samplerate=None, blocksize=None,
-                 device=None, channels=None, dtype=None, latency=None,
-                 extra_settings=None, callback=None, finished_callback=None,
-                 clip_off=None, dither_off=None, never_drop_input=None,
-                 prime_output_buffers_using_stream_callback=None):
+    def __init__(
+        self,
+        samplerate=None,
+        blocksize=None,
+        device=None,
+        channels=None,
+        dtype=None,
+        latency=None,
+        extra_settings=None,
+        callback=None,
+        finished_callback=None,
+        clip_off=None,
+        dither_off=None,
+        never_drop_input=None,
+        prime_output_buffers_using_stream_callback=None,
+    ):
         """PortAudio output stream (using NumPy).
 
         This has the same methods and attributes as `Stream`, except
@@ -1483,8 +1628,9 @@ class OutputStream(RawOutputStream):
         Stream, RawOutputStream
 
         """
-        _StreamBase.__init__(self, kind='output', wrap_callback='array',
-                             **_remove_self(locals()))
+        _StreamBase.__init__(
+            self, kind="output", wrap_callback="array", **_remove_self(locals())
+        )
 
     def write(self, data):
         """Write samples to the stream.
@@ -1519,27 +1665,40 @@ class OutputStream(RawOutputStream):
 
         """
         import numpy as np
+
         data = np.asarray(data)
         _, dtype = _split(self._dtype)
         _, channels = _split(self._channels)
         if data.ndim > 1 and data.shape[1] != channels:
-            raise ValueError('Number of channels must match')
+            raise ValueError("Number of channels must match")
         if data.dtype != dtype:
-            raise TypeError('dtype mismatch: {!r} vs {!r}'.format(
-                data.dtype.name, dtype))
+            raise TypeError(
+                "dtype mismatch: {!r} vs {!r}".format(data.dtype.name, dtype)
+            )
         if not data.flags.c_contiguous:
-            raise TypeError('data must be C-contiguous')
+            raise TypeError("data must be C-contiguous")
         return RawOutputStream.write(self, data)
 
 
 class Stream(InputStream, OutputStream):
     """Stream for input and output.  See __init__()."""
 
-    def __init__(self, samplerate=None, blocksize=None,
-                 device=None, channels=None, dtype=None, latency=None,
-                 extra_settings=None, callback=None, finished_callback=None,
-                 clip_off=None, dither_off=None, never_drop_input=None,
-                 prime_output_buffers_using_stream_callback=None):
+    def __init__(
+        self,
+        samplerate=None,
+        blocksize=None,
+        device=None,
+        channels=None,
+        dtype=None,
+        latency=None,
+        extra_settings=None,
+        callback=None,
+        finished_callback=None,
+        clip_off=None,
+        dither_off=None,
+        never_drop_input=None,
+        prime_output_buffers_using_stream_callback=None,
+    ):
         """PortAudio stream for simultaneous input and output (using NumPy).
 
         To open an input-only or output-only stream use `InputStream` or
@@ -1771,8 +1930,9 @@ class Stream(InputStream, OutputStream):
             See `default.prime_output_buffers_using_stream_callback`.
 
         """
-        _StreamBase.__init__(self, kind='duplex', wrap_callback='array',
-                             **_remove_self(locals()))
+        _StreamBase.__init__(
+            self, kind="duplex", wrap_callback="array", **_remove_self(locals())
+        )
 
 
 class DeviceList(tuple):
@@ -1794,20 +1954,22 @@ class DeviceList(tuple):
     __slots__ = ()
 
     def __repr__(self):
-        idev = _get_device_id(default.device['input'], 'input')
-        odev = _get_device_id(default.device['output'], 'output')
+        idev = _get_device_id(default.device["input"], "input")
+        odev = _get_device_id(default.device["output"], "output")
         digits = len(str(_lib.Pa_GetDeviceCount() - 1))
-        hostapi_names = [hostapi['name'] for hostapi in query_hostapis()]
-        text = '\n'.join(
-            u'{mark} {idx:{dig}} {name}, {ha} ({ins} in, {outs} out)'.format(
-                mark=(' ', '>', '<', '*')[(idx == idev) + 2 * (idx == odev)],
+        hostapi_names = [hostapi["name"] for hostapi in query_hostapis()]
+        text = "\n".join(
+            u"{mark} {idx:{dig}} {name}, {ha} ({ins} in, {outs} out)".format(
+                mark=(" ", ">", "<", "*")[(idx == idev) + 2 * (idx == odev)],
                 idx=idx,
                 dig=digits,
-                name=info['name'],
-                ha=hostapi_names[info['hostapi']],
-                ins=info['max_input_channels'],
-                outs=info['max_output_channels'])
-            for idx, info in enumerate(self))
+                name=info["name"],
+                ha=hostapi_names[info["hostapi"]],
+                ins=info["max_input_channels"],
+                outs=info["max_output_channels"],
+            )
+            for idx, info in enumerate(self)
+        )
         return text
 
 
@@ -1852,7 +2014,7 @@ class CallbackFlags(object):
 
     """
 
-    __slots__ = '_flags'
+    __slots__ = "_flags"
 
     def __init__(self, flags=0x0):
         self._flags = flags
@@ -1860,12 +2022,15 @@ class CallbackFlags(object):
     def __repr__(self):
         flags = str(self)
         if not flags:
-            flags = 'no flags set'
-        return '<sounddevice.CallbackFlags: {}>'.format(flags)
+            flags = "no flags set"
+        return "<sounddevice.CallbackFlags: {}>".format(flags)
 
     def __str__(self):
-        return ', '.join(name.replace('_', ' ') for name in dir(self)
-                         if not name.startswith('_') and getattr(self, name))
+        return ", ".join(
+            name.replace("_", " ")
+            for name in dir(self)
+            if not name.startswith("_") and getattr(self, name)
+        )
 
     def __bool__(self):
         return bool(self._flags)
@@ -1982,7 +2147,7 @@ class CallbackFlags(object):
 class _InputOutputPair(object):
     """Parameter pairs for device, channels, dtype and latency."""
 
-    _indexmapping = {'input': 0, 'output': 1}
+    _indexmapping = {"input": 0, "output": 1}
 
     def __init__(self, parent, default_attr):
         self._pair = [None, None]
@@ -2001,7 +2166,7 @@ class _InputOutputPair(object):
         self._pair[index] = value
 
     def __repr__(self):
-        return '[{0[0]!r}, {0[1]!r}]'.format(self)
+        return "[{0[0]!r}, {0[1]!r}]".format(self)
 
 
 class default(object):
@@ -2043,7 +2208,7 @@ class default(object):
 
     """
 
-    _pairs = 'device', 'channels', 'dtype', 'latency', 'extra_settings'
+    _pairs = "device", "channels", "dtype", "latency", "extra_settings"
     # The class attributes listed in _pairs are only provided here for static
     # analysis tools and for the docs.  They're overwritten in __init__().
     device = None, None
@@ -2068,7 +2233,7 @@ class default(object):
     with `query_devices()`.
 
     """
-    dtype = _default_dtype = 'float32', 'float32'
+    dtype = _default_dtype = "float32", "float32"
     """Data type used for input/output samples.
 
     The types ``'float32'``, ``'int32'``, ``'int16'``, ``'int8'`` and
@@ -2088,7 +2253,7 @@ class default(object):
     "ground".
 
     """
-    latency = _default_latency = 'high', 'high'
+    latency = _default_latency = "high", "high"
     """Suggested input/output latency in seconds.
 
     The special values ``'low'`` and ``'high'`` can be used to select
@@ -2160,22 +2325,20 @@ class default(object):
     def __init__(self):
         for attr in self._pairs:
             # __setattr__() must be avoided here
-            vars(self)[attr] = _InputOutputPair(self, '_default_' + attr)
+            vars(self)[attr] = _InputOutputPair(self, "_default_" + attr)
 
     def __setattr__(self, name, value):
         """Only allow setting existing attributes."""
         if name in self._pairs:
             getattr(self, name)._pair[:] = _split(value)
-        elif name in dir(self) and name != 'reset':
+        elif name in dir(self) and name != "reset":
             object.__setattr__(self, name, value)
         else:
-            raise AttributeError(
-                "'default' object has no attribute " + repr(name))
+            raise AttributeError("'default' object has no attribute " + repr(name))
 
     @property
     def _default_device(self):
-        return (_lib.Pa_GetDefaultInputDevice(),
-                _lib.Pa_GetDefaultOutputDevice())
+        return (_lib.Pa_GetDefaultInputDevice(), _lib.Pa_GetDefaultOutputDevice())
 
     @property
     def hostapi(self):
@@ -2188,7 +2351,7 @@ class default(object):
         self.__init__()
 
 
-if not hasattr(_ffi, 'I_AM_FAKE'):
+if not hasattr(_ffi, "I_AM_FAKE"):
     # This object shadows the 'default' class, except when building the docs.
     default = default()
 
@@ -2210,14 +2373,15 @@ class PortAudioError(Exception):
     """
 
     def __str__(self):
-        errormsg = self.args[0] if self.args else ''
+        errormsg = self.args[0] if self.args else ""
         if len(self.args) > 1:
-            errormsg = '{} [PaErrorCode {}]'.format(errormsg, self.args[1])
+            errormsg = "{} [PaErrorCode {}]".format(errormsg, self.args[1])
         if len(self.args) > 2:
             host_api, hosterror_code, hosterror_text = self.args[2]
-            hostname = query_hostapis(host_api)['name']
+            hostname = query_hostapis(host_api)["name"]
             errormsg = "{}: '{}' [{} error {}]".format(
-                errormsg, hosterror_text, hostname, hosterror_code)
+                errormsg, hosterror_text, hostname, hosterror_code
+            )
 
         return errormsg
 
@@ -2249,7 +2413,6 @@ class CallbackAbort(Exception):
 
 
 class AsioSettings(object):
-
     def __init__(self, channel_selectors):
         """ASIO-specific input/output settings.
 
@@ -2289,21 +2452,29 @@ class AsioSettings(object):
 
         """
         if isinstance(channel_selectors, int):
-            raise TypeError('channel_selectors must be a list or tuple')
+            raise TypeError("channel_selectors must be a list or tuple")
         # int array must be kept alive!
-        self._selectors = _ffi.new('int[]', channel_selectors)
-        self._streaminfo = _ffi.new('PaAsioStreamInfo*', dict(
-            size=_ffi.sizeof('PaAsioStreamInfo'),
-            hostApiType=_lib.paASIO,
-            version=1,
-            flags=_lib.paAsioUseChannelSelectors,
-            channelSelectors=self._selectors))
+        self._selectors = _ffi.new("int[]", channel_selectors)
+        self._streaminfo = _ffi.new(
+            "PaAsioStreamInfo*",
+            dict(
+                size=_ffi.sizeof("PaAsioStreamInfo"),
+                hostApiType=_lib.paASIO,
+                version=1,
+                flags=_lib.paAsioUseChannelSelectors,
+                channelSelectors=self._selectors,
+            ),
+        )
 
 
 class CoreAudioSettings(object):
-
-    def __init__(self, channel_map=None, change_device_parameters=False,
-                 fail_if_conversion_required=False, conversion_quality='max'):
+    def __init__(
+        self,
+        channel_map=None,
+        change_device_parameters=False,
+        fail_if_conversion_required=False,
+        conversion_quality="max",
+    ):
         """Mac Core Audio-specific input/output settings.
 
         Objects of this class can be used as *extra_settings* argument
@@ -2356,44 +2527,44 @@ class CoreAudioSettings(object):
 
         """
         conversion_dict = {
-            'min':    _lib.paMacCoreConversionQualityMin,
-            'low':    _lib.paMacCoreConversionQualityLow,
-            'medium': _lib.paMacCoreConversionQualityMedium,
-            'high':   _lib.paMacCoreConversionQualityHigh,
-            'max':    _lib.paMacCoreConversionQualityMax,
+            "min": _lib.paMacCoreConversionQualityMin,
+            "low": _lib.paMacCoreConversionQualityLow,
+            "medium": _lib.paMacCoreConversionQualityMedium,
+            "high": _lib.paMacCoreConversionQualityHigh,
+            "max": _lib.paMacCoreConversionQualityMax,
         }
 
         # Minimal checking on channel_map to catch errors that might
         # otherwise go unnoticed:
         if isinstance(channel_map, int):
-            raise TypeError('channel_map must be a list or tuple')
+            raise TypeError("channel_map must be a list or tuple")
 
         try:
             self._flags = conversion_dict[conversion_quality.lower()]
         except (KeyError, AttributeError) as e:
-            raise ValueError('conversion_quality must be one of ' +
-                             repr(list(conversion_dict))) from e
+            raise ValueError(
+                "conversion_quality must be one of " + repr(list(conversion_dict))
+            ) from e
         if change_device_parameters:
             self._flags |= _lib.paMacCoreChangeDeviceParameters
         if fail_if_conversion_required:
             self._flags |= _lib.paMacCoreFailIfConversionRequired
 
         # this struct must be kept alive!
-        self._streaminfo = _ffi.new('PaMacCoreStreamInfo*')
+        self._streaminfo = _ffi.new("PaMacCoreStreamInfo*")
         _lib.PaMacCore_SetupStreamInfo(self._streaminfo, self._flags)
 
         if channel_map is not None:
             # this array must be kept alive!
-            self._channel_map = _ffi.new('SInt32[]', channel_map)
+            self._channel_map = _ffi.new("SInt32[]", channel_map)
             if len(self._channel_map) == 0:
-                raise TypeError('channel_map must not be empty')
-            _lib.PaMacCore_SetupChannelMap(self._streaminfo,
-                                           self._channel_map,
-                                           len(self._channel_map))
+                raise TypeError("channel_map must not be empty")
+            _lib.PaMacCore_SetupChannelMap(
+                self._streaminfo, self._channel_map, len(self._channel_map)
+            )
 
 
 class WasapiSettings(object):
-
     def __init__(self, exclusive=False):
         """WASAPI-specific input/output settings.
 
@@ -2425,12 +2596,15 @@ class WasapiSettings(object):
         flags = 0x0
         if exclusive:
             flags |= _lib.paWinWasapiExclusive
-        self._streaminfo = _ffi.new('PaWasapiStreamInfo*', dict(
-            size=_ffi.sizeof('PaWasapiStreamInfo'),
-            hostApiType=_lib.paWASAPI,
-            version=1,
-            flags=flags,
-        ))
+        self._streaminfo = _ffi.new(
+            "PaWasapiStreamInfo*",
+            dict(
+                size=_ffi.sizeof("PaWasapiStreamInfo"),
+                hostApiType=_lib.paWASAPI,
+                version=1,
+                flags=flags,
+            ),
+        )
 
 
 class _CallbackContext(object):
@@ -2447,12 +2621,15 @@ class _CallbackContext(object):
 
     def __init__(self, loop=False):
         import threading
+
         try:
             import numpy
+
             assert numpy  # avoid "imported but unused" message (W0611)
         except ImportError as e:
             raise ImportError(
-                'NumPy must be installed for play()/rec()/playrec()') from e
+                "NumPy must be installed for play()/rec()/playrec()"
+            ) from e
         self.loop = loop
         self.event = threading.Event()
         self.status = CallbackFlags()
@@ -2460,6 +2637,7 @@ class _CallbackContext(object):
     def check_data(self, data, mapping, device):
         """Check data and output mapping."""
         import numpy as np
+
         data = np.asarray(data)
         if data.ndim < 2:
             data = data.reshape(-1, 1)
@@ -2470,18 +2648,20 @@ class _CallbackContext(object):
         if data.shape[1] == 1:
             pass  # No problem, mono data is duplicated into arbitrary channels
         elif data.shape[1] != len(mapping):
-            raise ValueError(
-                'number of output channels != size of output mapping')
+            raise ValueError("number of output channels != size of output mapping")
         # Apparently, some PortAudio host APIs duplicate mono streams to the
         # first two channels, which is unexpected when specifying mapping=[1].
         # In this case, we play silence on the second channel, but only if the
         # device actually supports a second channel:
-        if (mapping_is_explicit and np.array_equal(mapping, [0]) and
-                query_devices(device, 'output')['max_output_channels'] >= 2):
+        if (
+            mapping_is_explicit
+            and np.array_equal(mapping, [0])
+            and query_devices(device, "output")["max_output_channels"] >= 2
+        ):
             channels = 2
         silent_channels = np.setdiff1d(np.arange(channels), mapping)
         if len(mapping) + len(silent_channels) != channels:
-            raise ValueError('each channel may only appear once in mapping')
+            raise ValueError("each channel may only appear once in mapping")
 
         self.data = data
         self.output_channels = channels
@@ -2493,28 +2673,27 @@ class _CallbackContext(object):
     def check_out(self, out, frames, channels, dtype, mapping):
         """Check out, frames, channels, dtype and input mapping."""
         import numpy as np
+
         if out is None:
             if frames is None:
-                raise TypeError('frames must be specified')
+                raise TypeError("frames must be specified")
             if channels is None:
-                channels = default.channels['input']
+                channels = default.channels["input"]
             if channels is None:
                 if mapping is None:
-                    raise TypeError(
-                        'Unable to determine number of input channels')
+                    raise TypeError("Unable to determine number of input channels")
                 else:
                     channels = len(np.atleast_1d(mapping))
             if dtype is None:
-                dtype = default.dtype['input']
-            out = np.empty((frames, channels), dtype, order='C')
+                dtype = default.dtype["input"]
+            out = np.empty((frames, channels), dtype, order="C")
         else:
             frames, channels = out.shape
             dtype = out.dtype
         dtype = _check_dtype(dtype)
         mapping, channels = _check_mapping(mapping, channels)
         if out.shape[1] != len(mapping):
-            raise ValueError(
-                'number of input channels != size of input mapping')
+            raise ValueError("number of input channels != size of input mapping")
 
         self.out = out
         self.input_channels = channels
@@ -2535,21 +2714,23 @@ class _CallbackContext(object):
         # would create unwanted copies (and probably memory allocations).
         for target, source in enumerate(self.input_mapping):
             # If out.dtype is 'float64', 'float32' data is "upgraded" here:
-            self.out[self.frame:self.frame + self.blocksize, target] = \
-                indata[:self.blocksize, source]
+            self.out[self.frame : self.frame + self.blocksize, target] = indata[
+                : self.blocksize, source
+            ]
 
     def write_outdata(self, outdata):
         # 'float64' data is cast to 'float32' here:
-        outdata[:self.blocksize, self.output_mapping] = \
-            self.data[self.frame:self.frame + self.blocksize]
-        outdata[:self.blocksize, self.silent_channels] = 0
+        outdata[: self.blocksize, self.output_mapping] = self.data[
+            self.frame : self.frame + self.blocksize
+        ]
+        outdata[: self.blocksize, self.silent_channels] = 0
         if self.loop and self.blocksize < len(outdata):
             self.frame = 0
-            outdata = outdata[self.blocksize:]
+            outdata = outdata[self.blocksize :]
             self.blocksize = min(self.frames, len(outdata))
             self.write_outdata(outdata)
         else:
-            outdata[self.blocksize:] = 0
+            outdata[self.blocksize :] = 0
 
     def callback_exit(self):
         if not self.blocksize:
@@ -2565,15 +2746,18 @@ class _CallbackContext(object):
         self.stream._callback = None
         self.stream._finished_callback = None
 
-    def start_stream(self, StreamClass, samplerate, channels, dtype, callback,
-                     blocking, **kwargs):
+    def start_stream(
+        self, StreamClass, samplerate, channels, dtype, callback, blocking, **kwargs
+    ):
         stop()  # Stop previous playback/recording
-        self.stream = StreamClass(samplerate=samplerate,
-                                  channels=channels,
-                                  dtype=dtype,
-                                  callback=callback,
-                                  finished_callback=self.finished_callback,
-                                  **kwargs)
+        self.stream = StreamClass(
+            samplerate=samplerate,
+            channels=channels,
+            dtype=dtype,
+            callback=callback,
+            finished_callback=self.finished_callback,
+            **kwargs
+        )
         self.stream.start()
         global _last_callback
         _last_callback = self
@@ -2596,20 +2780,21 @@ class _CallbackContext(object):
 def _remove_self(d):
     """Return a copy of d without the 'self' entry."""
     d = d.copy()
-    del d['self']
+    del d["self"]
     return d
 
 
 def _check_mapping(mapping, channels):
     """Check mapping, obtain channels."""
     import numpy as np
+
     if mapping is None:
         mapping = np.arange(channels)
     else:
         mapping = np.array(mapping, copy=True)
         mapping = np.atleast_1d(mapping)
         if mapping.min() < 1:
-            raise ValueError('channel numbers must not be < 1')
+            raise ValueError("channel numbers must not be < 1")
         channels = mapping.max()
         mapping -= 1  # channel numbers start with 1
     return mapping, channels
@@ -2618,20 +2803,22 @@ def _check_mapping(mapping, channels):
 def _check_dtype(dtype):
     """Check dtype."""
     import numpy as np
+
     dtype = np.dtype(dtype).name
     if dtype in _sampleformats:
         pass
-    elif dtype == 'float64':
-        dtype = 'float32'
+    elif dtype == "float64":
+        dtype = "float32"
     else:
-        raise TypeError('Unsupported data type: ' + repr(dtype))
+        raise TypeError("Unsupported data type: " + repr(dtype))
     return dtype
 
 
-def _get_stream_parameters(kind, device, channels, dtype, latency,
-                           extra_settings, samplerate):
+def _get_stream_parameters(
+    kind, device, channels, dtype, latency, extra_settings, samplerate
+):
     """Get parameters for one direction (input or output) of a stream."""
-    assert kind in ('input', 'output')
+    assert kind in ("input", "output")
     if device is None:
         device = default.device[kind]
     if channels is None:
@@ -2648,24 +2835,31 @@ def _get_stream_parameters(kind, device, channels, dtype, latency,
     device = _get_device_id(device, kind, raise_on_error=True)
     info = query_devices(device)
     if channels is None:
-        channels = info['max_' + kind + '_channels']
+        channels = info["max_" + kind + "_channels"]
     try:
         # If NumPy is available, get canonical dtype name
-        dtype = _sys.modules['numpy'].dtype(dtype).name
+        dtype = _sys.modules["numpy"].dtype(dtype).name
     except Exception:
         pass  # NumPy not available or invalid dtype (e.g. 'int24') or ...
     try:
         sampleformat = _sampleformats[dtype]
     except KeyError as e:
-        raise ValueError('Invalid ' + kind + ' sample format') from e
+        raise ValueError("Invalid " + kind + " sample format") from e
     samplesize = _check(_lib.Pa_GetSampleSize(sampleformat))
-    if latency in ('low', 'high'):
-        latency = info['default_' + latency + '_' + kind + '_latency']
+    if latency in ("low", "high"):
+        latency = info["default_" + latency + "_" + kind + "_latency"]
     if samplerate is None:
-        samplerate = info['default_samplerate']
-    parameters = _ffi.new('PaStreamParameters*', (
-        device, channels, sampleformat, latency,
-        extra_settings._streaminfo if extra_settings else _ffi.NULL))
+        samplerate = info["default_samplerate"]
+    parameters = _ffi.new(
+        "PaStreamParameters*",
+        (
+            device,
+            channels,
+            sampleformat,
+            latency,
+            extra_settings._streaminfo if extra_settings else _ffi.NULL,
+        ),
+    )
     return parameters, dtype, samplesize, samplerate
 
 
@@ -2689,6 +2883,7 @@ def _buffer(ptr, frames, channels, samplesize):
 def _array(buffer, channels, dtype):
     """Create NumPy array from a buffer object."""
     import numpy as np
+
     data = np.frombuffer(buffer, dtype=dtype)
     data.shape = -1, channels
     return data
@@ -2709,18 +2904,18 @@ def _split(value):
     except TypeError:
         invalue = outvalue = value
     except ValueError as e:
-        raise ValueError('Only single values and pairs are allowed') from e
+        raise ValueError("Only single values and pairs are allowed") from e
     return invalue, outvalue
 
 
-def _check(err, msg=''):
+def _check(err, msg=""):
     """Raise PortAudioError for below-zero error codes."""
     if err >= 0:
         return err
 
     errormsg = _ffi.string(_lib.Pa_GetErrorText(err)).decode()
     if msg:
-        errormsg = '{}: {}'.format(msg, errormsg)
+        errormsg = "{}: {}".format(msg, errormsg)
 
     if err == _lib.paUnanticipatedHostError:
         # (gh82) We grab the host error info here rather than inside
@@ -2738,37 +2933,38 @@ def _check(err, msg=''):
 
 def _get_device_id(id_or_query_string, kind, raise_on_error=False):
     """Return device ID given space-separated substrings."""
-    assert kind in ('input', 'output', None)
+    assert kind in ("input", "output", None)
 
     if id_or_query_string is None:
         id_or_query_string = default.device
 
     idev, odev = _split(id_or_query_string)
-    if kind == 'input':
+    if kind == "input":
         id_or_query_string = idev
-    elif kind == 'output':
+    elif kind == "output":
         id_or_query_string = odev
     else:
         if idev == odev:
             id_or_query_string = idev
         else:
-            raise ValueError('Input and output device are different: {!r}'
-                             .format(id_or_query_string))
+            raise ValueError(
+                "Input and output device are different: {!r}".format(id_or_query_string)
+            )
 
     if isinstance(id_or_query_string, int):
         return id_or_query_string
     device_list = []
     for id, info in enumerate(query_devices()):
-        if not kind or info['max_' + kind + '_channels'] > 0:
-            hostapi_info = query_hostapis(info['hostapi'])
-            device_list.append((id, info['name'], hostapi_info['name']))
+        if not kind or info["max_" + kind + "_channels"] > 0:
+            hostapi_info = query_hostapis(info["hostapi"])
+            device_list.append((id, info["name"], hostapi_info["name"]))
 
     query_string = id_or_query_string.lower()
     substrings = query_string.split()
     matches = []
     exact_device_matches = []
     for id, device_string, hostapi_string in device_list:
-        full_string = device_string + ', ' + hostapi_string
+        full_string = device_string + ", " + hostapi_string
         pos = 0
         for substring in substrings:
             pos = full_string.lower().find(substring, pos)
@@ -2781,22 +2977,27 @@ def _get_device_id(id_or_query_string, kind, raise_on_error=False):
                 exact_device_matches.append(id)
 
     if kind is None:
-        kind = 'input/output'  # Just used for error messages
+        kind = "input/output"  # Just used for error messages
 
     if not matches:
         if raise_on_error:
             raise ValueError(
-                'No ' + kind + ' device matching ' + repr(id_or_query_string))
+                "No " + kind + " device matching " + repr(id_or_query_string)
+            )
         else:
             return -1
     if len(matches) > 1:
         if len(exact_device_matches) == 1:
             return exact_device_matches[0]
         if raise_on_error:
-            raise ValueError('Multiple ' + kind + ' devices found for ' +
-                             repr(id_or_query_string) + ':\n' +
-                             '\n'.join('[{}] {}'.format(id, name)
-                                       for id, name in matches))
+            raise ValueError(
+                "Multiple "
+                + kind
+                + " devices found for "
+                + repr(id_or_query_string)
+                + ":\n"
+                + "\n".join("[{}] {}".format(id, name) for id, name in matches)
+            )
         else:
             return -1
     return matches[0][0]
@@ -2818,17 +3019,17 @@ def _initialize():
     except OSError:
         pass
     else:
-        for stderr_name in 'stderr', '__stderrp':
+        for stderr_name in "stderr", "__stderrp":
             try:
                 old_stderr = getattr(stdio, stderr_name)
             except _ffi.error:
                 continue
             else:
-                devnull = stdio.fopen(_os.devnull.encode(), b'w')
+                devnull = stdio.fopen(_os.devnull.encode(), b"w")
                 setattr(stdio, stderr_name, devnull)
                 break
     try:
-        _check(_lib.Pa_Initialize(), 'Error initializing PortAudio')
+        _check(_lib.Pa_Initialize(), "Error initializing PortAudio")
         global _initialized
         _initialized += 1
     finally:
@@ -2844,7 +3045,7 @@ def _terminate():
 
     """
     global _initialized
-    _check(_lib.Pa_Terminate(), 'Error terminating PortAudio')
+    _check(_lib.Pa_Terminate(), "Error terminating PortAudio")
     _initialized -= 1
 
 
@@ -2866,6 +3067,6 @@ def _exit_handler():
 _atexit.register(_exit_handler)
 _initialize()
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # print(query_devices())
     ...

@@ -233,11 +233,26 @@ class Tag(Mixin, dict):
 
     def __init__(self, **kwargs) -> None:
 
-        for a, b in kwargs.items():
-            if isinstance(b, Base):
-                kwargs[a] = b.id
+        _kwargs = {}
 
-        dict.__init__(self, **kwargs)
+        for k, v in kwargs.items():
+
+            if k in TAG.list:
+                k = TAG[k]
+                if v in k.list:
+                    v = k[v]
+            elif k == TAG.ID:
+                v = v.lower()
+            elif k == TAG.DATE_TIME:
+                v = DATETIME(v)
+                
+            elif isinstance(v, dict): v = Tag(v)
+
+            _kwargs[k] = v
+            if isinstance(v, Base):
+                _kwargs[k] = v.id
+
+        dict.__init__(self, _kwargs)
 
     def __str__(self):
         return f"{self.className}({self.kwargs})"
@@ -264,25 +279,17 @@ class Tag(Mixin, dict):
         return encoded
 
     @classmethod
+    def decode_dict(cls, _dict):
+        tag = cls()
+
+        return tag
+
+    @classmethod
     def decode(cls, data) -> dict:
         if (cls.DELIMITER) in data:
             data = data.replace(cls.DELIMITER, b"")
-
         _dict = json.loads(data)
-
-        tag = cls()
-        for k, v in _dict.items():
-            if k in TAG.list:
-                k = TAG[k]
-                if v in k.list:
-                    v = k[v]
-            if k == TAG.ID:
-                v = v.lower()
-            elif k == TAG.DATE_TIME:
-                v = DATETIME(v)
-            # elif isinstance(v, dict): v = Tag.decode(json.dumps(v).encode())
-            tag[k] = v
-        return tag
+        return cls(**_dict)
 
     @classmethod
     def decodes(cls, data) -> list:
@@ -299,6 +306,10 @@ class Tag(Mixin, dict):
     def kwargs(self) -> str:
         _str = ""
         for k, v in self.items():
+            if v == "":
+                v = '""'
+            elif v == b"":
+                v = b'""'
             _str += f"{k}={v}, "
         _str = "".join(_str[:-2])
         return _str

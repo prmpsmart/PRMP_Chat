@@ -1,6 +1,7 @@
 from prmp_sql.bases import Columns
 from prmp_sql.database import DataBase
 from prmp_sql.operators import EQUAL, CONSTANT
+from prmp_sql.shortcuts import WHERE_EQUAL
 from prmp_sql.statements import (
     SELECT,
     INSERT,
@@ -18,13 +19,24 @@ from prmp_sql.datatypes import *
 import os
 
 
-from .core import DateTime, ATTRS, DATETIME, GENERATE_TAG_ID, CONSTANT as core_CONSTANT
+from .core import (
+    DateTime,
+    ATTRS,
+    DATETIME,
+    GENERATE_TAG_ID,
+    CONSTANT as core_CONSTANT,
+    Tag,
+)
 
 
 class User_DB:
     path = os.path.join(os.path.dirname(__file__), "CLIENT_DATA.db")
     user_id = ""
     loaded_server_settings = False
+
+    @staticmethod
+    def column_names(columns):
+        return [column.column for column in columns]
 
     def __init__(self):
         self.db = DataBase(self.path)
@@ -119,7 +131,7 @@ class User_DB:
         if User_DB.user_id != user.id:
             self.load_user()
 
-        columns = [a.column for a in self.user_details_columns]
+        columns = self.column_names(self.user_details_columns)
 
         values = ATTRS(
             user,
@@ -158,7 +170,7 @@ class User_DB:
             statement = UPDATE(
                 "user_details",
                 SET(*multi_values),
-                where=WHERE(EQUAL("id", CONSTANT(User_DB.user_id), parenthesis=0)),
+                where=WHERE_EQUAL("id", User_DB.user_id, parenthesis=0, constant=1),
             )
         else:
             statement = INSERT("user_details", values=VALUES(*values))
@@ -257,12 +269,12 @@ class User_DB:
         ...
 
     def add_chat(self, tag):
-        columns_names = [a.column for a in self.chats_columns]
+        columns_names = self.column_names(self.chats_columns)
 
         columns_names[0] = "id"
         columns_values = tag[tuple(columns_names)]
 
-        columns_names = [a.column for a in self.chats_columns]
+        columns_names = self.column_names(self.chats_columns)
 
         sorted_columns_values = []
         for cn in columns_values:
@@ -282,7 +294,7 @@ class User_DB:
             statement = UPDATE(
                 "chats",
                 set=SET(*sorted_columns_values[1:], columns=columns_names[1:]),
-                where=WHERE(EQUAL("chat_id", CONSTANT(tag.id))),
+                where=WHERE_EQUAL("chat_id", tag.id, constant=1),
             )
 
             self.db.exec(statement, quiet=1)
@@ -298,14 +310,30 @@ class User_DB:
         statement = UPDATE(
             "chats",
             set=SET(("sent", sent)),
-            where=WHERE(EQUAL("chat_id", CONSTANT(tag.id))),
+            where=WHERE_EQUAL("chat_id", tag.id, constant=1),
         )
 
         self.db.exec(statement, quiet=1)
         self.db.commit()
 
     def load_chats(self, user):
-        statement = SELECT('*', 'chats', WHERE())
+        NAME = lambda n: n.OBJ.__name__
+
+        contacts_chats_statement = SELECT(
+            "*", "chats", WHERE_EQUAL("type", NAME(user.contacts))
+        )
+
+        results = self.db.exec(contacts_chats_statement, quiet=1)
+
+        column_names = self.column_names(self.chats_columns)
+        column_names[0] = "id"
+
+        for result in results:
+            dict_result = dict(zip(column_names, result))
+            dict_result["sent"] = bool(dict_result["sent"])
+
+            chat_tag = Tag(**dict_result)
+            print(chat_tag)
 
     def load_members(self, user):
         ...
@@ -323,7 +351,7 @@ class User_DB:
         statement = SELECT(
             "settings",
             "other_settings",
-            where=WHERE(EQUAL("name", CONSTANT("server_settings"))),
+            where=WHERE_EQUAL("name", "server_settings", constant=1),
         )
 
         result = self.db.exec(statement, quiet=1) or {}
@@ -342,7 +370,7 @@ class User_DB:
             statement = UPDATE(
                 "other_settings",
                 SET(("settings", settings)),
-                where=WHERE(EQUAL("name", CONSTANT("server_settings"))),
+                where=WHERE_EQUAL("name", "server_settings", constant=1),
             )
         else:
             statement = INSERT(

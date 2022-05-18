@@ -1,17 +1,17 @@
 
 .vscode
 __pycache__
-media
-research
 *.pyd
+*.mp3
+*.obj
+*.wav
 imgs
 prmp_apps
 rsc
-_prmp_lib
-Telegram
-Windows_WiFi_Manager
+resources.py
+resources/
 prmp_chat_test
-notebooks
-resources
+notebooks/
+sound_files/
 old_ui
 _PRMP_CHAT_

@@ -1,6 +1,6 @@
 from prmp_sql.bases import Columns
 from prmp_sql.database import DataBase
-from prmp_sql.operators import EQUAL, CONSTANT
+from prmp_sql.operators import AND, EQUAL, CONSTANT
 from prmp_sql.shortcuts import WHERE_EQUAL
 from prmp_sql.statements import (
     SELECT,
@@ -18,16 +18,14 @@ from prmp_sql.datatypes import *
 
 import os
 
-
 from .core import (
     DateTime,
     ATTRS,
     DATETIME,
-    GENERATE_TAG_ID,
+    GENERATE_MEMBER_ID,
     CONSTANT as core_CONSTANT,
     Tag,
 )
-from .client import Manager
 
 
 class User_DB:
@@ -35,11 +33,16 @@ class User_DB:
     user_id = ""
     loaded_server_settings = False
 
+    # @property
+    # def path(self):
+    #     return os.path.join(os.path.dirname(__file__), f"CLIENT_DATA-{self.user.id}.db")
+
     @staticmethod
     def column_names(columns):
         return [column.column for column in columns]
 
-    def __init__(self):
+    def __init__(self, user=None):
+        self.user = user
         self.db = DataBase(self.path)
         self.db.init()
         self.user_details_columns = [
@@ -47,7 +50,7 @@ class User_DB:
             VARCHAR("name"),
             BLOB("key"),
             BLOB("icon"),
-            VARCHAR("description"),
+            VARCHAR("bio"),
             BOOLEAN("recv_data"),
             INT("contacts"),
             INT("groups"),
@@ -61,7 +64,7 @@ class User_DB:
             VARCHAR("object_id"),
             VARCHAR("name"),
             BLOB("icon"),
-            VARCHAR("description"),
+            VARCHAR("bio"),
             VARCHAR("object_type"),
             VARCHAR("creator"),
             INT("total_members"),
@@ -79,12 +82,14 @@ class User_DB:
             VARCHAR("path"),
         ]
         self.members_columns = [
+            VARCHAR("unique_id"),
             VARCHAR("member_id"),
             VARCHAR("name"),
             BLOB("icon"),
-            VARCHAR("description"),
-            VARCHAR("member_type"),
+            VARCHAR("bio"),
             BOOLEAN("admin"),
+            VARCHAR("manager_id"),
+            VARCHAR("manager_type"),
             BOOLEAN("is_contact"),
         ]
 
@@ -113,7 +118,8 @@ class User_DB:
         )
         members = CREATE_TABLE(
             "members",
-            *self.members_columns,
+            UNIQUE(self.members_columns[0]),
+            *self.members_columns[1:],
             check_exist=True,
         )
         other_settings = CREATE_TABLE(
@@ -130,7 +136,7 @@ class User_DB:
 
     def save_user(self, user):
         if User_DB.user_id != user.id:
-            self.load_user()
+            self.load_user(just_id=1)
 
         columns = self.column_names(self.user_details_columns)
 
@@ -180,13 +186,14 @@ class User_DB:
         self.db.exec(statement, dry=0, parameters=[v3], quiet=1)
 
         self.save_objects(user)
+        self.save_members(user)
         self.db.commit()
 
-    def load_user(self):
+    def load_user(self, just_id=False):
         statement = SELECT("*", "user_details")
         result = self.db.exec(statement, quiet=1)
 
-        if result:
+        if result and isinstance(result, list):
             result = result[0]
 
             columns = [a.column for a in self.user_details_columns]
@@ -198,7 +205,7 @@ class User_DB:
             ints = dict(zip(columns[5:10], result[5:10]))
             times = dict(zip(columns[-2:], result[-2:]))
 
-            from prmp_chat.backend.client import User
+            from backend.client import User
 
             result = user = User(**details)
             user.recv_data = bool(ints["recv_data"])
@@ -208,27 +215,28 @@ class User_DB:
             User_DB.user_id = user.id
 
             # TODO loading of the other contacts, groups, channels
-            self.load_objects(user)
-            self.load_chats(user)
-            self.load_members(user)
+            if not just_id:
+                self.load_objects(user)
+                self.load_chats(user)
 
         return result
 
     def save_objects(self, user):
         for type_ in ["contact", "channel", "group"]:
-            types = getattr(user, type_ + "s")
+            manager = getattr(user, type_ + "s")
             types_datas = []
-            for type in types.objects:
+            for member_manager in manager.objects:
                 data = (
-                    type.id,
-                    type.name,
-                    type.icon,
-                    type.description,
+                    member_manager.id,
+                    member_manager.name,
+                    member_manager.icon,
+                    member_manager.bio,
                     type_,
                     getattr(user, "creator", ""),
                     getattr(user, "objects", 0),
                 )
                 types_datas.append(data)
+
             statement = INSERT("objects", values=MULTI_VALUES(*types_datas))
             r = self.db.exec(statement, quiet=1)
             print(r)
@@ -239,9 +247,29 @@ class User_DB:
                 "*", "objects", where=WHERE_EQUAL("object_type", object_type)
             )
             results = self.db.exec(statement, quiet=1)
+
             if isinstance(results, list):
-                manager: _Manager = getattr(user, object_type+'s')
-                print(manager, manager.OBJ)
+
+                from .client import Manager
+
+                manager: Manager = getattr(user, object_type + "s")
+                OBJ = manager.OBJ
+
+                column_names = self.column_names(self.objects_columns)
+                column_names[0] = "id"
+
+                for result in results:
+                    tag = Tag(dict(zip(column_names, result)))
+
+                    needed_tag = Tag(tag[["id", "name", "icon", "bio", "creator"]])
+
+                    if object_type != "contact":
+                        needed_tag.users = self.load_members(
+                            needed_tag.id, OBJ.__name__
+                        )
+
+                    obj = OBJ(user, needed_tag)
+                    manager.add(obj)
 
     def add_chat(self, tag):
         columns_names = self.column_names(self.chats_columns)
@@ -269,7 +297,7 @@ class User_DB:
             statement = UPDATE(
                 "chats",
                 set=SET(*sorted_columns_values[1:], columns=columns_names[1:]),
-                where=WHERE_EQUAL("chat_id", tag.id, constant=1),
+                where=WHERE_EQUAL("chat_id", tag.id),
             )
 
             self.db.exec(statement, quiet=1)
@@ -285,7 +313,7 @@ class User_DB:
         statement = UPDATE(
             "chats",
             set=SET(("sent", sent)),
-            where=WHERE_EQUAL("chat_id", tag.id, constant=1),
+            where=WHERE_EQUAL("chat_id", tag.id),
         )
 
         self.db.exec(statement, quiet=1)
@@ -309,8 +337,74 @@ class User_DB:
 
             user.add_chat(chat_tag, saved=1)
 
-    def load_members(self, user):
-        ...
+    def save_members(self, user):
+        values = []
+
+        def get_values(member_manager):
+            columns = self.column_names(self.members_columns)
+
+            _values = []
+
+            for member in member_manager.objects:
+                GENERATE_MEMBER_ID(
+                    member,
+                    member_manager.id,
+                    member_manager.className,
+                )
+                id = member.id
+                col_name = member["unique_id", "id", "admin"]
+
+                contact = (id in member_manager.user.contacts.ids) or (
+                    id == member_manager.user.id
+                )
+                if not contact:
+                    new_col = member["name", "icon", "bio"]
+                else:
+                    new_col = ["", "", ""]
+
+                col_name[2:2] = new_col
+
+                col_name.extend([member_manager.id, member_manager.className, contact])
+
+                _values.append(tuple(col_name))
+            return _values
+
+        for manager in [user.channels, user.groups]:
+            for member_manager in manager:
+                values.extend(get_values(member_manager))
+
+        statement = INSERT("members", values=MULTI_VALUES(*values))
+
+        r = self.db.exec(statement, quiet=1)
+        print(r)
+
+    def load_members(self, manager_id, manager_type):
+        and_ = AND(
+            EQUAL("manager_id", CONSTANT(manager_id)),
+            EQUAL("manager_type", CONSTANT(manager_type)),
+        )
+        and_.parenthesis = False
+
+        statement = SELECT(
+            "*",
+            "members",
+            where=WHERE_EQUAL("manager_id", manager_id),
+        )
+
+        results = self.db.exec(statement, quiet=1)
+        columns = self.column_names(self.members_columns)
+
+        col_names = columns[:6]
+        col_names[1] = "id"
+
+        tags = []
+
+        for result in results:
+            tag = Tag(dict(zip(col_names, result[:6])))
+            tag.admin = bool(tag.admin)
+            tags.append(tag)
+
+        return tags
 
     def add_user(self, user):
         print(user, self)
@@ -325,7 +419,7 @@ class User_DB:
         statement = SELECT(
             "settings",
             "other_settings",
-            where=WHERE_EQUAL("name", "server_settings", constant=1),
+            where=WHERE_EQUAL("name", "server_settings"),
         )
 
         result = self.db.exec(statement, quiet=1) or {}
@@ -344,7 +438,7 @@ class User_DB:
             statement = UPDATE(
                 "other_settings",
                 SET(("settings", settings)),
-                where=WHERE_EQUAL("name", "server_settings", constant=1),
+                where=WHERE_EQUAL("name", "server_settings"),
             )
         else:
             statement = INSERT(

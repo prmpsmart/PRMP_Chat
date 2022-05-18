@@ -1,7 +1,7 @@
-# ----------------------------------------------------------
+from typing import Callable
 import json, threading, socket, os, time, hashlib
 from typing import List
-from prmp_lib.prmp_miscs.prmp_exts import PRMP_File
+from prmp_lib.prmp_miscs.prmp_exts import PRMP_File, base64
 
 
 # DATETIME--------------------------------------------------
@@ -10,18 +10,16 @@ try:
     from PySide6.QtCore import QDateTime as DateTime
 
     OFFLINE_FORMAT = "OFFLINE | dd/MM/yyyy | HH:mm:ss"
+
 except:
     from prmp_lib.prmp_miscs.prmp_datetime import PRMP_DateTime as DateTime
 
     OFFLINE_FORMAT = "OFFLINE | %d/%m/%Y | %H:%M:%S"
     _DATETIME_ = 1
-# ----------------------------------------------------------
 
-# ----------------------------------------------------------
 
-# ----------------------------------------------------------
-def THREAD(func, *args, **kwargs):
-    threading.Thread(target=func, args=args, kwargs=kwargs).start()
+def THREAD(target, *args, **kwargs):
+    threading.Thread(target=target, args=args, kwargs=kwargs).start()
 
 
 def DATETIME(date_time=None, num=1):
@@ -32,16 +30,20 @@ def DATETIME(date_time=None, num=1):
         else:
             return date_time
 
-    if isinstance(date_time, int) and date_time > 0:
+    if isinstance(date_time, int) and date_time >= 0:
         return (
             DateTime.fromtimestamp(date_time)
             if _DATETIME_
-            else DateTime.fromSecsSinceEpoch(date_time)
+            else DateTime.fromMSecsSinceEpoch(date_time)
+            # else DateTime.fromSecsSinceEpoch(date_time)
         )
 
     else:
         return (
-            int(date_time.timestamp()) if _DATETIME_ else date_time.toSecsSinceEpoch()
+            int(date_time.timestamp())
+            if _DATETIME_
+            else date_time.toMSecsSinceEpoch()
+            # else date_time.toSecsSinceEpoch()
         )
 
 
@@ -58,9 +60,7 @@ def DATE(dateTime: DateTime) -> str:
 
 
 def EXISTS(manager, obj):
-    return (
-        RESPONSE.EXIST if obj in manager else RESPONSE.EXTINCT
-    )  # ----------------------------------------------------------
+    return RESPONSE.EXIST if obj in manager else RESPONSE.EXTINCT
 
 
 def ATTRS(object, attrs=[]):
@@ -71,11 +71,39 @@ def ATTRS(object, attrs=[]):
     return res
 
 
-def GENERATE_TAG_ID(tag):
+def GENERATE_ID(column):
+    id = "|".join([str(a) for a in column])
+    # return id
+
+    id_byt = id.encode()
+    return B64_ENCODE(id_byt)
+
+    id_digest = hashlib.sha224(id_byt).hexdigest()
+    return id_digest
+
+
+def GENERATE_ACTION_ID(tag):
+    if tag.id:
+        return
+
+    raw_id = tag["action", "date_time", "type", "id"]
+
+    dt = raw_id[1]
+    if not isinstance(dt, int):
+        raw_id[1] = str(DATETIME(dt))
+
+    # everytime this function is called, this makes it give different id, no matter how identical the tag might be.
+    raw_id.append(str(DATETIME()))
+
+    tag.id = GENERATE_ID(raw_id)
+
+
+def GENERATE_CHAT_ID(tag):
     if tag.id:
         return
 
     raw_id = tag["sender", "recipient", "date_time", "type", "chat"]
+
     dt = raw_id[2]
     if not isinstance(dt, int):
         raw_id[2] = str(DATETIME(dt))
@@ -83,14 +111,42 @@ def GENERATE_TAG_ID(tag):
     # everytime this function is called, this makes it give different id, no matter how identical the tag might be.
     raw_id.append(str(DATETIME()))
 
-    id_byt = "|".join([str(a) for a in raw_id]).encode()
-    id = hashlib.sha224(id_byt).hexdigest()
+    tag.id = GENERATE_ID(raw_id)
 
-    tag.id = id
+
+def GENERATE_MEMBER_ID(tag, manager_id, manager_type):
+    tag.unique_id = GENERATE_ID([tag.id, manager_id, manager_type])
+
+
+def B64_ENCODE(data: bytes) -> str:
+    encoded = base64.b64encode(data)
+    str_decoded = encoded.decode()
+    return str_decoded
+
+
+def B64_DECODE(str_decoded: str) -> bytes:
+    str_encoded = str_decoded.encode()
+    data = base64.b64decode(str_encoded)
+    return data
+
+
+def GET_TYPE_ID(tag, name=False):
+    id_names = {
+        TYPE.USER: "user_id",
+        TYPE.GROUP: "group_id",
+        TYPE.CHANNEL: "channel_id",
+    }
+
+    id_name = id_names.get(tag.type)
+
+    id = tag[id_name]
+
+    if name:
+        return id_name, id
+
     return id
 
 
-# ----------------------------------------------------------
 class Mixin:
     @property
     def className(self):
@@ -100,10 +156,6 @@ class Mixin:
         return f"<{self}>"
 
 
-# ----------------------------------------------------------
-
-
-# ----------------------------------------------------------
 class CONSTANT(Mixin):
     def __init__(self, name: str, objects: list = []):
         self._NAME = name.upper()
@@ -159,95 +211,176 @@ class CONSTANT(Mixin):
         for k in state["OBJECTS"]:
             self.OBJECTS[k] = CONSTANT(k)
 
+    def __bool__(self):
+        return True
 
-SOCKET = CONSTANT("SOCKET", objects=["RESET", "CLOSED", "ALIVE"])
-SOCKET.ERRORS = SOCKET["RESET", "CLOSED"]
 
-CHAT = CONSTANT("CHAT", objects=["TEXT", "AUDIO", "IMAGE", "VIDEO"])
-STATUS = CONSTANT("STATUS", objects=["ONLINE", "OFFLINE", "LAST_SEEN"])
+SOCKET = CONSTANT("SOCKET", objects=["ALIVE", "CLOSED", "RESET"])
+SOCKET.ERRORS = SOCKET["CLOSED", "RESET"]
+
+CHAT = CONSTANT("CHAT", objects=["AUDIO", "IMAGE", "TEXT", "VIDEO"])
+CALL = CONSTANT("CALL", objects=["AUDIO", "VIDEO"])
+STATUS = CONSTANT("STATUS", objects=["ONLINE", "OFFLINE"])
 
 RESPONSE = CONSTANT(
     "RESPONSE",
     objects=[
-        "SUCCESSFUL",
-        "FAILED",
-        "LOGIN_FAILED",
-        "SIMULTANEOUS_LOGIN",
+        "ACCEPTED",
+        "ADMIN_ONLY",
+        "DECLINED",
         "EXIST",
         "EXTINCT",
+        "FAILED",
         "FALSE_KEY",
+        "LOGIN_FAILED",
+        "SIMULTANEOUS_LOGIN",
+        "SUCCESSFUL",
     ],
 )
-ID = CONSTANT("ID", objects=["USER_ID", "GROUP_ID", "CHANNEL_ID", "CHAT_ID"])
-TYPE = CONSTANT("TYPE", objects=["ADMIN", "CONTACT", "GROUP", "CHANNEL"])
+ID = CONSTANT("ID", objects=["CHANNEL_ID", "GROUP_ID", "USER_ID"])
+TYPE = CONSTANT("TYPE", objects=["CHANNEL", "CONTACT", "USER", "GROUP"])
 ACTION = CONSTANT(
     "ACTION",
     objects=[
         "ADD",
-        "REMOVE",
+        "ADD_ADMIN",
+        "ADD_MEMBER",
+        CALL,
+        "CALL_REQUEST",
+        "CALL_RESPONSE",
+        CHAT,
         "CREATE",
         "DELETE",
-        "CHANGE",
         "DATA",
-        CHAT,
-        "START",
-        "END",
-        STATUS,
-        "SIGNUP",
+        "CHANGE",
         "LOGIN",
         "LOGOUT",
-        "QUEUED",
+        "ONLY_ADMIN",
+        "REMOVE",
+        "REMOVE_ADMIN",
+        "REMOVE_MEMBER",
+        "SIGNUP",
+        STATUS,
     ],
 )
+
 TAG = CONSTANT(
     "TAG",
     objects=[
         ACTION,
-        "CHAT_COLOR",
+        "ADMIN",
+        "BIO",
+        CALL,
         CHAT,
-        RESPONSE,
-        "SENDER",
-        "RECIPIENT",
-        "SENDER_TYPE",
+        "CHAT_COLOR",
+        "CREATOR",
+        "DATA",
+        "DATE_TIME",
+        "ICON",
         ID,
         "KEY",
+        "MOBILE",
         "NAME",
-        "DATA",
-        STATUS,
-        "DATE_TIME",
-        "LAST_SEEN",
+        "RECIPIENT",
+        RESPONSE,
         "RESPONSE_TO",
-        "EXT",
-        TYPE,
+        "SENDER",
+        STATUS,
         "TEXT",
+        TYPE,
     ],
 )
 
-# ----------------------------------------------------------
+
+class Base(Mixin):
+    def __init__(
+        self,
+        id: str,
+        name: str = "",
+        icon: str = "",
+        date_time: DateTime = None,
+        bio="",
+    ):
+        self.id = id
+        self.name = name
+        self.icon = icon
+        self.bio = bio
+        self.date_time = date_time or DATETIME(num=0)
+
+    def get_name(self):
+        return self.name or self.id
+
+    def __str__(self):
+        add = ""
+        if self.name:
+            add = f", name={self.name}"
+        return f"{self.className}(id={self.id}{add})"
+
+    @property
+    def data(self):
+        tag = Tag(
+            name=self.name,
+            id=self.id,
+            icon=self.icon,
+            bio=self.bio,
+        )
+
+        return tag
+
+    def change_data(self, tag: "Tag"):
+        name, icon, bio = tag["name", "icon", "bio"]
+        if name:
+            self.name = name
+        if icon:
+            self.icon = icon
+        if bio:
+            self.bio = bio
 
 
-# ----------------------------------------------------------
 class Tag(Mixin, dict):
     DELIMITER = b"<TAG>"
     # upper() of kwargs is the default lookup
 
-    def __init__(self, **kwargs) -> None:
+    # default values
+    # action, type, id, text, chat
+
+    def __init__(self, values={}, **kwargs) -> None:
+        _dict = values.copy()
+        _dict.update(kwargs)
+
+        if not _dict.get("date_time"):
+            _dict["date_time"] = DATETIME(num=0)
 
         _kwargs = {}
 
-        for k, v in kwargs.items():
+        for k, v in _dict.items():
 
-            if k in TAG.list:
+            if k == "data":
+                if isinstance(v, bytes):
+                    v = B64_ENCODE(v)
+
+            if k in TAG.list:  # k in TAG.objects
                 k = TAG[k]
-                if v in k.list:
+                if v in k.list:  # v in objects of one of the TAG's objects
                     v = k[v]
+
             elif k == TAG.ID:
                 v = v.lower()
+
             elif k == TAG.DATE_TIME:
                 v = DATETIME(v)
 
             elif isinstance(v, dict):
                 v = Tag(v)
+
+            elif isinstance(v, (list, tuple)):
+                vals = []
+                for v_ in v:
+                    val = v_
+                    if isinstance(v_, dict):
+                        val = Tag(v_)
+                    vals.append(val)
+                v = tuple(vals)
 
             _kwargs[k] = v
             if isinstance(v, Base):
@@ -269,7 +402,14 @@ class Tag(Mixin, dict):
                 v = DATETIME(v)
             elif isinstance(v, Tag):
                 v = v.dict
-            # elif isinstance(v, Base): v = v.id
+            elif isinstance(v, tuple):
+                vals = []
+                for v_ in v:
+                    val = v_
+                    if isinstance(v_, Tag):
+                        val = v_.dict
+                    vals.append(val)
+                v = tuple(vals)
             _dict[k] = v
         return _dict
 
@@ -281,7 +421,7 @@ class Tag(Mixin, dict):
 
     @classmethod
     def decode_dict(cls, _dict):
-        tag = cls()
+        tag = cls(_dict)
 
         return tag
 
@@ -289,6 +429,8 @@ class Tag(Mixin, dict):
     def decode(cls, data) -> dict:
         if (cls.DELIMITER) in data:
             data = data.replace(cls.DELIMITER, b"")
+        if not data:
+            data = b"{}"
         _dict = json.loads(data)
         return cls(**_dict)
 
@@ -333,7 +475,7 @@ class Tag(Mixin, dict):
         elif isinstance(attr, list):
             tup = {}
             for at in attr:
-                t = self.get(str(at))
+                t = self[str(at)]
                 tup[at] = t
             return tup
         elif isinstance(attr, str):
@@ -365,35 +507,21 @@ class Tag(Mixin, dict):
         self.clear()
         self.update(dict)
 
+    @property
+    def raw_data(self):
+        data = self.data
+        if data:
+            return B64_DECODE(data)
+
+    @property
+    def raw_icon(self):
+        icon = self.icon
+        if icon:
+            return B64_DECODE(icon)
+
 
 EMPTY_TAG = Tag()
-EMPTY_TAGS = [EMPTY_TAG]
-
-# ----------------------------------------------------------
-
-
-# ----------------------------------------------------------
-class Base(Mixin):
-    def __init__(
-        self,
-        id: str,
-        name: str = "",
-        icon: str = "",
-        date_time: DateTime = None,
-        description="",
-    ):
-        self.id = id
-        self.name = name
-        self.icon = icon
-        self.description = description
-        self.ext = ""
-        self.date_time = date_time or DATETIME(num=0)
-
-    def __str__(self):
-        add = ""
-        if self.name:
-            add = f", name={self.name}"
-        return f"{self.className}(id={self.id}{add})"
+EMPTY_TAGS = [EMPTY_TAG, []]
 
 
 class _User_Base(Base):
@@ -402,6 +530,13 @@ class _User_Base(Base):
         self._status = ""
         self.change_status(STATUS.OFFLINE)
         self.last_seen = None
+
+    @property
+    def data(self):
+        tag = super().data
+        tag.status = self.status
+
+        return tag
 
     @property
     def status(self):
@@ -427,79 +562,37 @@ class _User_Base(Base):
         if status == STATUS.ONLINE:
             self._status = status
         else:
-            last_seen = None
-            if status == STATUS.OFFLINE:
-                self._status = status
-            else:
-                # status is int from the server
-                self._status = STATUS.OFFLINE
-                last_seen = status
-            self.last_seen = DATETIME(last_seen, num=0)
+            self._status = STATUS.OFFLINE
+            last = status if isinstance(status, int) else 0
+            self.last_seen = DATETIME(last, num=0)
 
-
-class _Multi_Users(Base):
-    only_admin = False
-
-    def __init__(self, **kwargs):
-        Base.__init__(self, **kwargs)
-        self.creator: _User = None
-        self._admins = {}
-        self._users = {}
-        self.last_time: DateTime = None
-        self.chats = None
-
-    def add_admin(self, admin_id: str):
-        if admin_id in self._users:
-            self._admins[admin_id] = self._users[admin_id]
-
-    def add(self, user):
-        self._users[user.id] = user
-
-    @property
-    def ids(self) -> list:
-        return list(self._users.keys())
-
-    @property
-    def users(self) -> list:
-        return list(self._users.values())
-
-    @property
-    def objects(self) -> list:
-        return self.users
-
-    @property
-    def _objects(self) -> dict:
-        return self._users.copy()
-
-    @property
-    def admin_ids(self) -> list:
-        return list(self._admins.keys())
-
-    @property
-    def admins(self) -> list:
-        return list(self._admins.values())
-
-    def add_chat(self, chat) -> None:
-        self.chats.append(chat)
+    def __getstate__(self):
+        dic = self.__dict__.copy()
+        dic["_status"] = STATUS.OFFLINE
+        return dic
 
 
 class _User(_User_Base):
     def __init__(self, key: str = "", **kwargs):
         _User_Base.__init__(self, **kwargs)
-        self.change_status(STATUS.OFFLINE)
-
         self.key = key
         self.users = None
         self.groups = None
         self.channels = None
 
+    def change_data(self, tag: Tag):
+        super().change_data(tag)
+        key = tag.key
+        if key:
+            self.key = key
+
     def add_user(self, user: _User_Base) -> None:
         self.users.add(user)
 
-    def add_group(self, group: _Multi_Users) -> None:
+    def add_group(self, group: "Multi_Users") -> None:
         self.groups.add(group)
 
-    def add_channel(self, channel: _Multi_Users) -> None:
+    def add_channel(self, channel: "Multi_Users") -> None:
         self.channels.add(channel)
 
 
@@ -519,7 +612,7 @@ class _Manager:
 
     def remove(self, id: str) -> None:
         obj: _User_Base = self.get(id)
-        if obj != None:
+        if obj:
             del self._objects[id]
 
     def add_chat(self, chat: Tag) -> None:
@@ -551,15 +644,13 @@ class _Manager:
                 litu.append(self[na])
             return litu
 
-        else:
-            return self.objects[:]
+        elif isinstance(name, (int, slice)):
+            return self.objects[name]
 
 
-# ----------------------------------------------------------
-
-
-# ----------------------------------------------------------
 class Sock(Mixin):
+    buffer_size = 1048576
+
     def __init__(self, socket: socket.socket = None):
         self.socket = socket or self
         self.state = SOCKET.CLOSED
@@ -585,9 +676,12 @@ class Sock(Mixin):
         return self.alive
 
     def _close(self) -> None:
+        self.state = SOCKET.CLOSED
         try:
-            self.state = SOCKET.CLOSED
             self.socket.shutdown(0)
+        except Exception as e:
+            ...
+        try:
             self.socket.close()
         except Exception as e:
             ...
@@ -610,13 +704,16 @@ class Sock(Mixin):
             self.state = SOCKET.CLOSED
             return SOCKET.CLOSED
 
-    def recv_tag(self, buffer: int = 1048576, many=False) -> Tag:
+    def read(self):
+        return self.socket.recv(self.buffer_size)
+
+    def recv_tag(self, many=False) -> Tag:
         fn = Tag.decodes if many else Tag.decode
 
         def func():
-            encoded = self.socket.recv(buffer)
-            if encoded == b"":
-                return EMPTY_TAGS if many else EMPTY_TAG
+            encoded = self.read()
+            if not encoded:
+                raise IOError("pipe is empty, other channel has been disconnected!")
             tag = fn(encoded)
             return tag
 
@@ -630,7 +727,7 @@ class Sock(Mixin):
 
     @property
     def alive(self) -> bool:
-        self.catch(lambda: self.socket.send(b""))
+        self.catch(lambda: self.socket.send(Tag.DELIMITER))
         return self._alive
 
     def sendall_tag(self, tag: Tag) -> int:
@@ -638,6 +735,3 @@ class Sock(Mixin):
             return self.socket.sendall(tag.encode)
 
         return self.catch(func)
-
-
-# ----------------------------------------------------------

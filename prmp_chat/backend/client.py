@@ -1,67 +1,71 @@
-# --------------------------------------------------------
-from .database import User_DB
-from .core import _Manager, _User_Base, _Multi_Users, _User
+from typing import Any, Dict, Union
+from .client_database import User_DB
+from .core import _Manager, _User_Base, _User
 from .core import *
-from prmp_lib.prmp_miscs.prmp_exts import PRMP_File
 
-# --------------------------------------------------------
 
-TYPE.add("CONTACT")
-
-# --------------------------------------------------------
 class Manager(_Manager):
     OBJ = None
 
-    def add(self, tag: Tag) -> None:
-        if tag.id != self.user.id:
-            obj = self.OBJ(self.user, tag)
-            super().add(obj)
+    def add(self, tag: Tag) -> Union["Multi_Users", "Contact"]:
+        id = tag.id
+        if id != self.user.id:
+            if self.OBJ:
+                obj = self.get(id)
+                if obj:
+                    obj.change_data(tag)
+                else:
+                    obj = self.OBJ(self.user, tag)
+                    super().add(obj)
+
+                return obj
 
 
 class Chats:
-    def __init__(self, user):
+    def __init__(self, user: "User") -> None:
         self.user = user
-        self.chats = []
-        self.unread_chats = 0
+        self.chats_dict = {}
+        self.chats: List[Tag] = []
         self.last_time = DATETIME(num=0)
 
-    def add_chat(self, tag):
-        self.last_time = tag.date_time or DATETIME(num=0)
+    def add_chat(self, tag: Tag) -> None:
+        if tag.id not in self.chats_dict:
+            self.last_time = tag.get_date_time() or DATETIME(num=0)
 
-        if tag.sender != self.user.id:
-            self.unread_chats += 1
-        self.chats.append(tag)
+            tag.seen = tag.sender == self.user.id
+
+            self.chats.append(tag)
+            self.chats_dict[tag.id] = tag
 
     @property
-    def last_chat(self):
+    def last_chat(self) -> Tag:
         if self.chats:
             return self.chats[-1]
 
-    def read(self):
-        self.unread_chats = 0
+    def unseen_chats(self) -> List[Tag]:
+        unseens = []
+        for chat in self.chats:
+            if not chat.seen:
+                unseens.append(chat)
+        return unseens
+
+    @property
+    def unseens(self) -> int:
+        value = len(self.unseen_chats())
+        return value
+
+    def remove_chat(self, tag_id: str):
+        if tag_id in self.chats_dict:
+            tag: Tag = self.chats_dict[tag_id]
+            del self.chats_dict[tag_id]
+            self.chats.remove(tag)
 
 
-# --------------------------------------------------------
-
-
-class User_Base:
-    def set_icon(self, file):
-        file = PRMP_File(file)
-        self.icon = file.base64Data
-        self.ext = file.ext
-
-
-# --------------------------------------------------------
-
-
-class Contact(Chats, _User_Base, User_Base):
-    def __init__(self, user, tag):
-        _User_Base.__init__(self, id=tag.id, name=tag.name, icon=tag.icon)
+class Contact(Chats, _User_Base):
+    def __init__(self, user: "User", tag: Tag):
+        _User_Base.__init__(self, id=tag.id, name=tag.name, icon=tag.icon, bio=tag.bio)
         Chats.__init__(self, user)
-
-    def __getstate__(self):
-        self._status = STATUS.OFFLINE
-        return self.__dict__
+        self.change_status(tag.status)
 
 
 class Contacts_Manager(Manager):
@@ -76,32 +80,41 @@ class Contacts_Manager(Manager):
             obj.add_chat(chat)
 
 
-# --------------------------------------------------------
+class Multi_Users(Chats, Base):
+    only_admin = False
 
-
-# --------------------------------------------------------
-class Multi_Users(Chats, _Multi_Users):
-    def __init__(self, user, tag):
-        _Multi_Users.__init__(self, id=tag.id, name=tag.name, icon=tag.icon)
+    def __init__(self, user: "User", tag: Tag):
+        Base.__init__(self, id=tag.id, name=tag.name, icon=tag.icon, bio=tag.bio)
         Chats.__init__(self, user)
 
-        self.creator = tag.creator
-        self._admins = tag.admins
-        self._users = {a: b for a, b in tag.users}
+        self.creator: str = tag.creator
+        self.users = list(tag.users or [])
+        self.admins = list(tag.admins or [])
 
-    @property
-    def ids(self) -> list:
-        return list(self._users)
+    def change_data(self, tag: Tag):
+        super().change_data(tag)
+        self.users = list(tag.users or [])
+        self.admins = list(tag.admins or [])
 
-    @property
-    def users(self) -> list:
-        return list(self._users)
+        DB.SAVE_USER(self.user)
+
+    def add_user(self, id: str):
+        if id not in self.users:
+            self.users.append(id)
+
+    def add_admin(self, id: str):
+        if (id in self.users) and (id not in self.admins):
+            self.admins.append(id)
 
 
 class Group(Multi_Users):
-    def __init__(self, user, tag):
+    def __init__(self, user: "User", tag: Tag):
         super().__init__(user, tag)
-        self.only_admin = tag.only_admin
+        self.only_admin: bool = bool(tag.only_admin)
+
+    def change_data(self, tag: Tag):
+        super().change_data(tag)
+        self.only_admin = bool(tag.only_admin)
 
 
 class Groups_Manager(Manager):
@@ -116,46 +129,69 @@ class Channels_Manager(Manager):
     OBJ = Channel
 
 
-# --------------------------------------------------------
-
-
-# --------------------------------------------------------
-
-
-class User(_User, User_Base):
-    user_db = User_DB()
+class User(_User):
+    i = False
 
     @classmethod
     def load_user(cls):
-        return cls.user_db.load_user()
+        return User_DB().load_user()
+
+    @classmethod
+    def i(cls):
+        return "i" in os.sys.argv
+
+    @property
+    def user_db(self):
+        return User_DB(self)
 
     def __init__(self, **kwargs):
         _User.__init__(self, **kwargs)
         self.users = Contacts_Manager(self)
         self.groups = Groups_Manager(self)
         self.channels = Channels_Manager(self)
-        self.unsents = []
+
+        self.queued = {}
         self.recv_data = False
-        self.recv_tags = False
+        self.pending_change_data: Tag = None
+
+        self.pending_created_objects = {}
+
         self.contacts = self.users
 
-    def load_data(self, tags):
-        self.name = tags.name
-        self.icon = tags.icon
-        self.ext = tags.ext
+    def set_pending_change_data(self, tag: Tag):
+        self.pending_change_data = tag
 
-        data = dict(users=tags.users, groups=tags.groups, channels=tags.channels)
+    def clear_pending_change_data(self):
+        self.pending_change_data = None
 
-        for name, objs in data.items():
-            manager = getattr(self, name)
-            for id, _dict in objs.items():
-                tag = Tag(id=id, **_dict)
-                manager.add(tag)
+    def implement_change(self):
+        if self.pending_change_data:
+            self.change_data(self.pending_change_data)
+            self.clear_pending_change_data()
 
-        self.user_db.save_user(self)
+            DB.SAVE_USER(self)
+
+    def load_data(self, tag: Tag):
+        data = Tag(tag.data)
+        self.name = data.name or ""
+        self.icon = data.raw_icon or ""
+        self.bio = data.bio
+        self.change_status(data.status)
+
+        other_datas = dict(users=data.users, groups=data.groups, channels=data.channels)
+
+        for name, objs in other_datas.items():
+            manager: Manager = getattr(self, name)
+
+            for obj in objs:
+                manager.add(obj)
+
         self.recv_data = True
+        DB.SAVE_USER(self)
 
-    def add_chat(self, tag, saved=False):
+        # self.user_db.save_user(self)
+
+    def add_chat(self, tag: Tag, saved=False):
         type = tag.type
         if type == TYPE.CONTACT:
             self.users.add_chat(tag)
@@ -167,27 +203,32 @@ class User(_User, User_Base):
             return
 
         if tag.sender == self.id and not tag.sent:
-            self.unsents.append(tag)
+            self.add_queued(tag)
+
         if not saved:
-            self.user_db.add_chat(tag)
+            # self.user_db.add_chat(tag)
+            ...
 
-    def add_user(self, user):
+    def add_queued(self, tag: Tag):
+        if tag.id not in self.queued:
+            self.queued[tag.id] = tag
+
+    def add_user(self, user: Contact):
         super().add_user(user)
-        self.user_db.add_user(user)
+        # self.user_db.add_user(user)
 
-    def add_group(self, group):
+    def add_group(self, group: Group):
         super().add_group(group)
-        self.user_db.add_group(group)
+        # self.user_db.add_group(group)
 
-    def add_channel(self, channel):
+    def add_channel(self, channel: Channel):
         super().add_channel(channel)
-        self.user_db.add_channel(channel)
+        # self.user_db.add_channel(channel)
+
+    def get_chat_object(self, id):
+        return self.users[id] or self.groups[id] or self.channels[id]
 
 
-# --------------------------------------------------------
-
-
-# --------------------------------------------------------
 class Socket(socket.socket, Sock):
     def __init__(self, *args, **kwargs):
         socket.socket.__init__(self, *args, **kwargs)
@@ -200,7 +241,32 @@ class Client:
     def __str__(self) -> str:
         return f"Client(ip={self.ip}, port={self.port})"
 
-    def __init__(self, ip="127.0.0.1", port=7767, user=None, relogin=0, LOG=print):
+    def __init__(
+        self,
+        ip="127.0.0.1",
+        port=7767,
+        user=None,
+        relogin=0,
+        LOG=print,
+        STATUS_LOG: Callable[[STATUS], None] = None,
+        CHAT_STATUS: Callable[[Tag], None] = None,
+        RECV_LOG: Callable[[Tag], None] = None,
+    ):
+
+        self.receivers = {
+            ACTION.ADD: self.add_receiver,
+            ACTION.ADD_ADMIN: self.add_admin_receiver,
+            ACTION.ADD_MEMBER: self.add_member_receiver,
+            ACTION.CHANGE: self.change_receiver,
+            ACTION.CHAT: self.chat_receiver,
+            ACTION.CREATE: self.create_receiver,
+            ACTION.DATA: self.data_receiver,
+            ACTION.ONLY_ADMIN: self.only_admin_receiver,
+            ACTION.REMOVE_ADMIN: self.remove_admin_receiver,
+            ACTION.REMOVE_MEMBER: self.remove_member_receiver,
+            ACTION.STATUS: self.status_receiver,
+        }
+
         self.create_socket()
 
         self._stop = False  # stop connection or try to relogin
@@ -209,13 +275,31 @@ class Client:
         self.user = user
 
         self.relogin = relogin  # try to relogin after connection failure
-        self.LOG = LOG  # a function or method to receive logs, defaults is print()
+        self.LOG = LOG  # a function or method to receive logs, defaults is print
+        self.STATUS_LOG = STATUS_LOG  # a function or method to receive STATUS logs
+        self.CHAT_STATUS = (
+            CHAT_STATUS  # a function or method to receive CHAT TAG status
+        )
+        self.RECV_LOG = RECV_LOG  # a function or method to receive TAG logs
+
+    def log(self, *args):
+        if self.LOG:
+            self.LOG(*args)
 
     def create_socket(self):
         self.socket = Socket(socket.AF_INET, socket.SOCK_STREAM)
 
-    def send_tag(self, tag):
+    def send_tag(self, tag: Tag):
         return self.socket.send_tag(tag)
+
+    def send_action_tag(self, tag: Tag):
+        GENERATE_ACTION_ID(tag)
+        res = self.send_tag(tag)
+        if (not isinstance(res, int)) and (
+            tag.action not in [ACTION.CALL, ACTION.CALL_RESPONSE, ACTION.CALL_REQUEST]
+        ):
+            self.user.add_queued(tag)
+        return res
 
     def recv_tag(self, *args, **kwargs):
         return self.socket.recv_tag(*args, **kwargs)
@@ -223,17 +307,23 @@ class Client:
     def recv_tags(self):
         return self.socket.recv_tags()
 
-    def sendall_tag(self, tag):
+    def sendall_tag(self, tag: Tag):
         return self.socket.sendall_tag(tag)
 
-    def set_user(self, user):
+    def set_user(self, user: User):
         self.user = user
 
     @property
     def alive(self):
         return self.socket.alive
 
+    @property
+    def online(self):
+        return self.alive and self.user and (STATUS.ONLINE == self.user.current_status)
+
     def _connect(self):
+        # self.log('Connecting to Server\n')
+
         if self.alive:
             return True
 
@@ -241,38 +331,38 @@ class Client:
         if not alive:
             self.create_socket()
             alive = self.socket._connect(self.ip, self.port)
+
         return alive
 
     def signup(
-        self, id="", name="", key="", user=None, force=False, login=False, start=False
+        self,
+        id,
+        key,
+        name="",
+        login=False,
+        start=False,
     ):
         if not self._connect():
             return
-        self.LOG("Signup Started")
+        self.log("Signup Started")
 
-        self.user = user or self.user
-
-        assert (id and name and key) or self.user, "Provide [id, name, key] or user"
-
-        id = id or self.user.id
-        name = name or self.user.name
-        key = key or self.user.key
+        assert id and key, "Provide [id, key] or user"
 
         action = ACTION.SIGNUP
         tag = Tag(id=id, name=name, key=key, action=action)
         soc_resp = self.send_tag(tag)
         if soc_resp in SOCKET.ERRORS:
-            self.LOG(soc_resp)
+            self.log(soc_resp)
             return soc_resp
 
         response_tag = self.recv_tag()
         if response_tag in SOCKET.ERRORS:
-            self.LOG(response_tag)
+            self.log(response_tag)
             return response_tag
 
         response = response_tag.response
 
-        self.LOG(f"{action} -> {response}")
+        self.log(f"{action} -> {response}")
 
         if response == RESPONSE.SUCCESSFUL:
             if not self.user:
@@ -282,19 +372,16 @@ class Client:
 
         return response
 
-    def login(self, id="", key="", user=None, start=False):
+    def login(self, id="", key="", start=False):
         if not self._connect():
             return SOCKET.CLOSED
-        self.LOG("Login Started")
 
-        self.user = user or self.user
-        if self.user and self.user.status == STATUS.ONLINE:
-            return RESPONSE.SIMULTANEOUS_LOGIN
-
-        assert (id and key) or self.user, "Provide [id, key] or user"
+        self.log("Login Started")
 
         id = id or self.user.id
         key = key or self.user.key
+
+        assert id and key, "Provide [id, key] or user with valid id and key"
 
         action = ACTION.LOGIN
         tag = Tag(id=id, key=key, action=action)
@@ -314,20 +401,17 @@ class Client:
 
         if success:
             response = response_tag[0].response
-            self.LOG(f"{action} -> {response}")
+            self.log(f"{action} -> {response}")
 
             if response == RESPONSE.SUCCESSFUL:
                 self._stop = False
 
-                if not self.user:
+                if (not self.user) or (self.user.id != id):
                     self.user = User(id=id, key=key)
-                self.user.change_status(STATUS.ONLINE)
 
-                if not self.user.recv_data:
-                    self.restore_data()
+                self.change_status(STATUS.ONLINE)
 
-                self.send_status()
-                self.send_queued_tags()
+                DB.SAVE_USER(self.user)
 
                 if start:
                     self.start_session()
@@ -343,108 +427,94 @@ class Client:
                 return
 
             res = self.login(start=start)
-            if res in [RESPONSE.SUCCESSFUL, RESPONSE.SIMULTANEOUS_LOGIN]:
+            if res in [RESPONSE.SUCCESSFUL, RESPONSE.EXTINCT]:
                 return res
-            # elif res == SOCKET.CLOSED: self.create_socket()
+
             time.sleep(1)
 
     def start_session(self):
-        self.LOG("Listening to Server.")
+        self.log("Listening to Server.")
 
-        while True:
+        data = b""
 
-            if self._stop:
-                return
-            if self.user.recv_data and not self.user.recv_tags:
-                self.recv_queued_tags()
+        if not self.user.recv_data:
+            self.send_data(self.user.id)
 
-            # self.send_queued_tags()
+        while not self._stop:
 
-            tags = self.recv_tags()
-            if tags == EMPTY_TAGS:
+            if self.user.queued:
+                self.send_queued_tags()
+
+            read = self.socket.catch(self.socket.read)
+
+            if (not read) or (read in EMPTY_TAGS):
                 continue
 
-            if tags in SOCKET.ERRORS:
-                self.gone_offline()
-                res = ""
+            if read in SOCKET.ERRORS:
+                self.gone_offline(read)
+
                 if self.relogin:
-                    self.LOG("RE-LOGIN in progress!")
+                    self.log("RE-LOGIN in progress!")
                     res = self.re_login()
 
-                if res != RESPONSE.SUCCESSFUL:
+                    if res != RESPONSE.SUCCESSFUL:
+
+                        return
+                else:
                     return
 
-            for tag in tags:
-                self.parse(tag)
+            else:
+                data += read
+                ready_data = []
 
-    def logout(self):
+                if Tag.DELIMITER in data:
+                    datas = data.split(Tag.DELIMITER)
+
+                    if data.endswith(Tag.DELIMITER):
+                        data = b""
+                        ready_data = datas
+                    else:
+                        data = datas[-1]
+                        ready_data = datas[:-1]
+
+                for rdata in ready_data:
+                    tag = Tag.decode(rdata)
+                    self.parse(tag)
+
+    def logout(self, close=True):
         soc_resp = self.send_tag(Tag(action=ACTION.LOGOUT))
         if isinstance(soc_resp, int):
-            self.stop()
+            self.stop(close)
             soc_resp = RESPONSE.SUCCESSFUL
         return soc_resp
 
-    def stop(self):
+    def stop(self, close=True):
         if not self._stop:
             self.relogin = False
-            self.socket._close()
-            self.gone_offline()
+            if close:
+                self.socket._close()
+            self.gone_offline("STOP")
             self._stop = True
 
-    def gone_offline(self):
+    def gone_offline(self, read):
         if self.user:
-            self.user.change_status(STATUS.OFFLINE)
-            self.LOG("GONE OFFLINE", self.user.str_last_seen)
+            self.change_status(STATUS.OFFLINE)
+            self.log("Reason=", read, " -> GONE OFFLINE", self.user.str_last_seen)
 
-    def parse(self, tag):
-        action = tag.action
-        if action == ACTION.STATUS:
-            self.recv_status(tag)
-        elif action == ACTION.CHAT:
-            self.recv_chat(tag)
-        elif action == ACTION.DATA:
-            self.recv_data(tag)
-        elif action == ACTION.ADD:
-            self.recv_add(tag)
-        elif action == ACTION.REMOVE:
-            self.recv_remove(tag)
-        elif action == ACTION.CREATE:
-            self.recv_create(tag)
-        elif action == ACTION.CHANGE:
-            self.recv_change(tag)
-        elif action == ACTION.DELETE:
-            self.recv_delete(tag)
+    def change_status(self, status):
+        self.user.change_status(status)
 
-    def restore_data(self):
-        if self.user:
-            return self.send_data(self.user.id)
+        if self.STATUS_LOG:
+            self.STATUS_LOG(status)
 
     # senders
-    def send_data(self, id, type=TYPE.CONTACT):
+    def send_data(self, id: str, type=TYPE.CONTACT):
         tag = Tag(id=id, action=ACTION.DATA, type=type)
         return self.send_tag(tag)
 
-    def send_add(self, id, type):
-        tag = Tag(action=ACTION.ADD, type=type, id=id)
-        return self.send_tag(tag)
-
-    def send_remove(self, id, type):
-        tag = Tag(action=ACTION.REMOVE, type=type, id=id)
-        return self.send_tag(tag)
-
-    def send_create(self, id, type, name, icon):
-        tag = Tag(action=ACTION.CREATE, type=type, id=id, name=name, icon=icon)
-        return self.send_tag(tag)
-
-    def send_change(self, id, change, type, data):
-        tag = Tag(action=ACTION.CHANGE, change=change, type=type, id=id, data=data)
-        return self.send_tag(tag)
-
-    def send_delete(self, id, type):
-        tag = Tag(action=ACTION.DELETE, type=type, id=id)
-        return self.send_tag(tag)
-
-    def send_chat(self, recipient, text="", data="", chat=CHAT.TEXT, type=TYPE.CONTACT):
+    def send_chat(
+        self, recipient: str, text="", data="", chat=CHAT.TEXT, type=TYPE.CONTACT
+    ):
         tag = Tag(
             recipient=recipient,
             data=data,
@@ -457,101 +527,255 @@ class Client:
         )
         return self.send_chat_tag(tag)
 
-    def send_chat_tag(self, tag):
-        GENERATE_TAG_ID(tag)
-        self.user.add_chat(tag)
+    def send_chat_tag(self, tag: Tag, resend=False) -> Tag:
+        GENERATE_CHAT_ID(tag)
         res = self.send_tag(tag)
         tag.sent = isinstance(res, int)
+        if not resend:
+            self.user.add_chat(tag)
         return tag
 
-    def send_start(self, id, type):
-        ...
-
-    def send_end(self, id, type):
-        ...
-
-    def send_status(self):
-        return self.send_tag(Tag(action=ACTION.STATUS))
-
     def send_queued_tags(self):
-        if self.alive and self.user.unsents:
-            if self._stop:
-                return
-            unsents = []
+        queued: Dict[str, Tag] = self.user.queued.copy()
 
-            for chat in self.user.unsents:
-                tag = self.send_chat_tag(chat)
-                time.sleep(0.3)
-                if not tag.sent:
-                    unsents.append(chat)
+        if queued:
+            for chat in queued.values():
+                tag = self.send_chat_tag(chat, resend=True)
+                time.sleep(1)
+
+                if tag.sent:
+                    del self.user.queued[tag.id]
+                    if tag.action == ACTION.CHAT and self.CHAT_STATUS:
+                        self.CHAT_STATUS(tag)
                 else:
-                    User.user_db.chat_sent(tag)
-
-            self.user.unsents = unsents
+                    # self.user.user_db.chat_sent(tag)
+                    ...
 
     # receivers
-    def recv_data(self, tag):
+    def parse(self, tag: Tag):
+        action = tag.action
+        receiver = self.receivers.get(action)
+
+        if receiver:
+            receiver(tag)
+
+        if self.RECV_LOG:
+            self.RECV_LOG(tag)
+
+    def get_type_id(self, tag: Tag) -> str:
+        add_type = tag.type
+
+        return (
+            tag.user_id
+            if add_type == TYPE.USER
+            else tag.group_id
+            if add_type == TYPE.GROUP
+            else tag.channel_id
+            if add_type == TYPE.CHANNEL
+            else ""
+        )
+
+    def get_multi_user(self, tag: Tag) -> Multi_Users:
+        type = tag.type
+
+        manager: Manager = None
+
+        if type == TYPE.GROUP:
+            manager = self.user.groups
+
+        elif type == TYPE.CHANNEL:
+            manager = self.user.channels
+
+        if manager:
+            return manager[self.get_type_id(tag)]
+
+    def get_add_method(self, type):
+        add = None
+        if type == TYPE.CONTACT:
+            add = self.user.users.add
+        elif type == TYPE.GROUP:
+            add = self.user.groups.add
+        elif type == TYPE.CHANNEL:
+            add = self.user.channels.add
+
+        return add
+
+    def add_receiver(self, tag: Tag):
+        if tag.data:
+            add = self.get_add_method(tag.type)
+            if add:
+                tag.obj = add(Tag(values=tag.data))
+
+    def add_admin_receiver(self, tag: Tag):
+        multi_user = self.get_multi_user(tag)
+        user_id = tag.user_id
+
+        if multi_user and user_id:
+            multi_user.add_admin(user_id)
+
+    def add_member_receiver(self, tag: Tag):
+        multi_user = self.get_multi_user(tag)
+        print(tag)
+        user_id = tag.user_id
+
+        if multi_user and user_id:
+            multi_user.add_user(user_id)
+
+        elif user_id == self.user.id:
+            data = tag.data
+            if data:
+                add_type = tag.type
+                add = self.get_add_method(add_type)
+                if add:
+                    tag.obj = add(Tag(values=data))
+
+    def change_receiver(self, tag: Tag):
+        id = self.get_type_id(tag)
+
+        if id == self.user.id:
+            if tag.response == RESPONSE.SUCCESSFUL:
+                self.user.implement_change()
+
+        elif id:
+            chat_object = self.user.get_chat_object(id)
+
+            if chat_object:
+                chat_object.change_data(tag)
+
+    def chat_receiver(self, tag: Tag):
+        self.user.add_chat(tag)
+
+    def create_receiver(self, tag: Tag):
+        type, response = tag["type", "response"]
+        if response == RESPONSE.SUCCESSFUL:
+            pending_object = self.user.pending_created_objects.get(tag.id)
+            if pending_object:
+                add = self.get_add_method(type)
+                tag.obj = add(pending_object)
+
+    def data_receiver(self, tag: Tag):
         if tag.response == RESPONSE.SUCCESSFUL:
             if tag.id == self.user.id:
                 self.user.load_data(tag)
 
-    def recv_add(self, tag):
-        ...
+    def only_admin_receiver(self, tag: Tag):
+        only_admin = bool(tag.user_id)
+        multi_user = self.get_multi_user(tag)
+        if multi_user:
+            multi_user.only_admin = only_admin
 
-    def recv_remove(self, tag):
-        ...
+    def remove_admin_receiver(self, tag: Tag):
+        multi_user = self.get_multi_user(tag)
+        user_id = tag.user_id
 
-    def recv_create(self, tag):
-        ...
+        if multi_user and user_id:
+            if user_id in multi_user.admins:
+                multi_user.admins.remove(user_id)
 
-    def recv_change(self, tag):
-        ...
+    def remove_member_receiver(self, tag: Tag):
+        multi_user = self.get_multi_user(tag)
+        user_id = tag.user_id
 
-    def recv_delete(self, tag):
-        ...
+        if multi_user and user_id:
+            if user_id in multi_user.admins:
+                multi_user.admins.remove(user_id)
+            if user_id in multi_user.users:
+                multi_user.users.remove(user_id)
 
-    def recv_chat(self, tag):
-        self.user.add_chat(tag)
-
-    def recv_start(self, tag):
-        ...
-
-    def recv_end(self, tag):
-        ...
-
-    def recv_status(self, tag):
+    def status_receiver(self, tag: Tag):
         if tag.id:
-            obj = self.user.users.get(tag.id)
-            if obj:
-                obj.change_status(tag.status)
+            user = self.user.users.get(tag.id)
+            if user:
+                user.change_status(tag.status)
         elif tag.statuses:
             for id, status in tag.statuses:
                 user = self.user.users.get(id)
-                if user == None:
-                    continue
-                user.change_status(status)
-
-    def recv_queued_tags(self):
-        res = self.send_tag(Tag(action=ACTION.QUEUED))
-        if isinstance(res, int):
-            self.user.recv_tags = True
+                if user:
+                    user.change_status(status)
 
 
-# --------------------------------------------------------
+class DB:
+    FILE_DIR = os.path.dirname(__file__)
+    FILE = os.path.join(FILE_DIR, "CLIENT_DATA.pc")
 
+    DEFAULT_SAVE_DATA = dict(
+        user="", icon_set="svg", users={}, server_settings=("127.0.0.1", 7767)
+    )
+    SAVE_DATA = {}
 
-FILE_DIR = os.path.dirname(__file__)
-FILE = os.path.join(FILE_DIR, "CLIENT_DATA.pc")
+    @classmethod
+    def SAVE(cls):
+        file = PRMP_File(cls.FILE, perm="wb")
+        file.saveObj(cls.SAVE_DATA)
+        file.save()
+        file.close()
 
+    @classmethod
+    def LOAD(cls):
+        file = PRMP_File(cls.FILE)
+        save_data = file.loadObj()
+        file.close()
+        if isinstance(save_data, dict):
+            cls.SAVE_DATA = save_data
 
-def SAVE(user):
-    _file = PRMP_File(FILE, perm="w")
-    user._status = STATUS.OFFLINE
-    _file.saveObj(user)
-    _file.save()
+    @classmethod
+    def SAVE_USER(cls, user: User):
+        users = cls.SAVE_DATA.get("users")
+        id = user.id
+        if isinstance(users, dict):
+            users[id] = user
+            cls.SAVE_DATA["users"] = users
+        else:
+            cls.SAVE_DATA["users"] = {id: user}
 
+        if not User.i():
+            cls.SAVE_DATA["user"] = id
 
-def LOAD() -> User:
-    _file = PRMP_File(FILE)
-    user = _file.loadObj()
-    return user
+        cls.SAVE()
+
+    @classmethod
+    def CLEAR_USER(cls, id: str):
+        users = cls.SAVE_DATA.get("users")
+        if isinstance(users, dict):
+            if id in users:
+                del users[id]
+                cls.SAVE_DATA["users"] = users
+            cls.SAVE()
+
+    @classmethod
+    def GET_USER(cls, id: str) -> User:
+        users = cls.SAVE_DATA.get("users")
+        if isinstance(users, dict):
+            return users.get(id)
+
+    @classmethod
+    def GET_LAST_USER(cls) -> User:
+        if User.i():
+            return
+
+        id: str = cls.SAVE_DATA.get("user")
+        if id:
+            return cls.GET_USER(id)
+
+    @classmethod
+    def GET_SERVER_SETTINGS(cls) -> tuple:
+        return cls.SAVE_DATA.get("server_settings") or cls.DEFAULT_SAVE_DATA.get(
+            "server_settings"
+        )
+
+    @classmethod
+    def SET_SERVER_SETTINGS(cls, server_settings: tuple):
+        cls.SAVE_DATA["server_settings"] = server_settings
+        cls.SAVE()
+
+    @classmethod
+    def GET_ICON_SET(cls) -> str:
+        icon_set = cls.SAVE_DATA.get("icon_set") or cls.DEFAULT_SAVE_DATA.get(
+            "icon_set"
+        )
+        return icon_set
+
+    @classmethod
+    def SET_ICON_SET(cls, icon_set: str):
+        cls.SAVE_DATA["icon_set"] = icon_set
+        cls.SAVE()

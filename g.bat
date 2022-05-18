@@ -1,0 +1,1 @@
+python C:\Users\Administrator\Coding_Projects\Python\Dev_Workspace\PRMP_Chat\prmp_chat\chat_ui\resources\gen_qrc.py

@@ -23,4 +23,4 @@
 > * 
 
 ## Mobile version
-Check out the mobile version, a mobile client app for the server of PRMP Chat at [peachy](!https://github.com/prmpsmart/peachy)
+Check out the mobile version, a mobile client app for the server of PRMP Chat at [peachy](https://github.com/prmpsmart/peachy)
